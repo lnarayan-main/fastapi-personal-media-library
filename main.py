@@ -7,7 +7,7 @@ from sqlmodel import Session, select
 import os
 
 from database import create_db_and_tables, engine
-from api import auth, users, media, categories
+from api import auth, users, media, categories, dashboard
 from models.user import User
 from services.auth_service import get_password_hash
 
@@ -67,6 +67,7 @@ app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(media.router)
 app.include_router(categories.router)
+app.include_router(dashboard.router)
 
 
 # Root test endpoint (kept)

@@ -49,3 +49,7 @@ class UserUpdate(SQLModel):
     status: Optional[UserStatus] = None
     about: Optional[str] = None
     password: Optional[str] = Field(default=None, min_length=8)
+
+class UserStatusUpdate(SQLModel):
+    id: int
+    status: UserStatus

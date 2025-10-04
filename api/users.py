@@ -6,7 +6,7 @@ from datetime import datetime
 
 from database import get_session
 from services.auth_service import get_current_user, require_admin
-from models.user import User
+from models.user import User, UserStatusUpdate
 from services.file_service import safe_filename, save_upload_file, save_upload_file_async
 from config import UPLOAD_DIR
 from typing import List
@@ -90,3 +90,20 @@ def users_list(
     if not users:
         raise HTTPException(status_code=404, detail="Users not found.")
     return users
+
+
+@router.post("/user/change-status")
+def changeUserStatus(
+    user_data: UserStatusUpdate,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    user = session.exec(select(User).where(User.id == user_data.id)).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found.")
+    user.status = user_data.status
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    return {"status": 200, "detail": "Status changed successfully."}
+    
