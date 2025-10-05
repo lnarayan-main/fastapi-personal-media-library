@@ -19,6 +19,10 @@ class UserRead(BaseModel):
     about: Optional[str] = None
     profile_pic_url: Optional[str] = None
     created_at: datetime
+    
+    class Config:
+        # ⭐️ ADD THIS LINE ⭐️
+        from_attributes = True
 
 class UserUpdate(BaseModel):
     name: Optional[str] = None

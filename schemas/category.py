@@ -9,3 +9,8 @@ class CategoryBase(BaseModel):
 class CategoryRead(CategoryBase):
     id: int
     status: str
+
+    class Config:
+        from_attributes = True
+
+

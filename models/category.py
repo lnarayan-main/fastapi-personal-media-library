@@ -14,4 +14,5 @@ class Category(SQLModel, table=True):
     description: Optional[str] = None
 
     # Reverse relationship: all media items in this category
-    media_items: List["Media"] = Relationship(back_populates="category")
+    media: List["Media"] = Relationship(back_populates="category")
+

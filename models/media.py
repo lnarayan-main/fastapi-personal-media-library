@@ -3,6 +3,7 @@ from typing import Optional
 from sqlmodel import Field, SQLModel, Relationship
 from enum import Enum as PyEnum
 from datetime import datetime
+from schemas.category import CategoryRead
 
 class MediaType(str, PyEnum):
     IMAGE = "image"
@@ -28,7 +29,7 @@ class Media(SQLModel, table=True):
     owner_id: int = Field(foreign_key="users.id")
 
     # Relationships
-    category: Optional["Category"] = Relationship(back_populates="media_items")
+    category: Optional["Category"] = Relationship(back_populates="media")
     owner: "User" = Relationship(back_populates="media")
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -49,4 +50,8 @@ class MediaRead(SQLModel):
     thumbnail_url: Optional[str]
     owner_id: int
     category_id: Optional[int]
+    category: Optional[CategoryRead] = None 
     created_at: datetime
+
+
+

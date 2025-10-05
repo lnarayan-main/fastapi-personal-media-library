@@ -2,6 +2,7 @@
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
+from schemas.category import CategoryRead
 
 class MediaCreate(BaseModel):
     title: str
@@ -19,3 +20,8 @@ class MediaRead(BaseModel):
     owner_id: int
     category_id: Optional[int]
     created_at: datetime
+    category: Optional[CategoryRead] = None
+
+    class Config:
+        from_attributes = True 
+
