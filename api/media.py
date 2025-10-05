@@ -1,19 +1,20 @@
 # backend/api/media.py
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Query
 from typing import List, Optional
 import os
 from uuid import uuid4
 import shutil
 from datetime import datetime
 
-from sqlmodel import Session, select
+from sqlmodel import Session, select, func
 
 from database import get_session
 from services.auth_service import get_current_user
 from services.file_service import save_upload_file, save_upload_file_async
 from config import UPLOAD_DIR
-from models.media import Media
-from models.user import User
+from models.media import Media, MediaStatusUpdate
+from models.user import User, UserRole
+from schemas.media import PaginatedMedia
 
 router = APIRouter()
 
@@ -201,3 +202,61 @@ def delete_media(
     session.commit()
 
     return {"message": "Media deleted successfully"}
+
+
+@router.get("/media-management", response_model=PaginatedMedia)
+def users_list(
+    current_user: User = Depends(get_current_user),
+    page: int = Query(1, ge=1, description="Page number, starts from 1"),
+    size: int = Query(10, ge=1, le=100, description="Number of items per page"),
+    search: str | None = Query(None, description="Search term to filter media by title or description (case-insensitive)"),
+    session: Session = Depends(get_session),
+):
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only admins can view all users"
+        )
+    
+    statement = select(Media)
+
+    if search:
+        search_pattern = f"%{search}%"
+
+        statement = statement.where(
+            (Media.title.ilike(search_pattern)) | (Media.description.ilike(search_pattern))
+        )
+
+    total_count = session.exec(select(func.count()).select_from(statement)).one()
+
+    offset = (page - 1) * size
+
+    statement = statement.order_by(Media.id).offset(offset).limit(size)
+
+    media = session.exec(statement).all()
+    
+    total_pages = (total_count + size -1) // size if total_count > 0 else 0
+    
+    return PaginatedMedia(
+        total_count=total_count,
+        page=page,
+        size= size,
+        items=media,
+        total_pages=total_pages
+    )
+
+
+@router.post("/media/change-status")
+def changeUserStatus(
+    media_data: MediaStatusUpdate,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    media = session.exec(select(Media).where(Media.id == media_data.id)).first()
+    if not media:
+        raise HTTPException(status_code=404, detail="Media not found.")
+    media.status = media_data.status
+    session.add(media)
+    session.commit()
+    session.refresh(media)
+    return {"status": 200, "detail": "Status changed successfully."}

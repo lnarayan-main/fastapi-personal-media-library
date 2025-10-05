@@ -1,8 +1,10 @@
 # backend/schemas/media.py
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 from schemas.category import CategoryRead
+from sqlmodel import SQLModel, Field
+from models.media import MediaStatus
 
 class MediaCreate(BaseModel):
     title: str
@@ -21,7 +23,15 @@ class MediaRead(BaseModel):
     category_id: Optional[int]
     created_at: datetime
     category: Optional[CategoryRead] = None
+    status: MediaStatus
 
     class Config:
         from_attributes = True 
+
+class PaginatedMedia(SQLModel):
+    items: List[MediaRead] = Field(description="The list of media for the current page.")
+    page: int = Field(description="The current page number (1-based).")
+    size: int = Field(description="The number of items per page.")
+    total_count: int = Field(description="Total number of media matching the filter.")
+    total_pages: int
 

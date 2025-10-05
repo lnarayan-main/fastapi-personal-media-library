@@ -1,7 +1,7 @@
 # backend/api/users.py
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Query
 import os
-from sqlmodel import Session, select
+from sqlmodel import Session, select, func
 from datetime import datetime
 
 from database import get_session
@@ -10,6 +10,7 @@ from models.user import User, UserStatusUpdate
 from services.file_service import safe_filename, save_upload_file, save_upload_file_async
 from config import UPLOAD_DIR
 from typing import List
+from schemas.user import PaginatedUsers, UserRole
 
 router = APIRouter()
 
@@ -74,22 +75,46 @@ def update_profile(
     return current_user
 
 
-@router.get("/users", response_model=List[User])
+@router.get("/users", response_model=PaginatedUsers)
 def users_list(
     current_user: User = Depends(get_current_user),
+    page: int = Query(1, ge=1, description="Page number, starts from 1"),
+    size: int = Query(10, ge=1, le=100, description="Number of items per page"),
+    search: str | None = Query(None, description="Search term to filter users by name or email (case-insensitive)"),
     session: Session = Depends(get_session),
 ):
-    # Optional: restrict to admins only
-    if current_user.role != "admin":
+    if current_user.role != UserRole.ADMIN:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only admins can view all users"
         )
 
-    users = session.exec(select(User).where(User.role != 'admin')).all()
-    if not users:
-        raise HTTPException(status_code=404, detail="Users not found.")
-    return users
+    statement = select(User).where(User.role != UserRole.ADMIN)
+
+    if search:
+        search_pattern = f"%{search}%"
+
+        statement = statement.where(
+            (User.name.ilike(search_pattern)) | (User.email.ilike(search_pattern))
+        )
+
+    total_count = session.exec(select(func.count()).select_from(statement)).one()
+
+    offset = (page - 1) * size
+
+    statement = statement.order_by(User.id).offset(offset).limit(size)
+
+    users = session.exec(statement).all()
+    
+    total_pages = (total_count + size - 1) // size if total_count > 0 else 0
+
+    return PaginatedUsers(
+        total_count=total_count,
+        page=page,
+        size= size,
+        items=users,
+        total_pages=total_pages
+    )
 
 
 @router.post("/user/change-status")

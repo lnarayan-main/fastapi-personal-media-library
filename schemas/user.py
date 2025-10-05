@@ -1,8 +1,9 @@
 # backend/schemas/user.py
 from pydantic import BaseModel, EmailStr
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 from models.user import UserRole, UserStatus
+from sqlmodel import SQLModel, Field
 
 class UserCreate(BaseModel):
     name: str
@@ -29,3 +30,10 @@ class UserUpdate(BaseModel):
     email: Optional[EmailStr] = None
     about: Optional[str] = None
     password: Optional[str] = None
+
+class PaginatedUsers(SQLModel):
+    items: List[UserRead] = Field(description="The list of users for the current page.")
+    page: int = Field(description="The current page number (1-based).")
+    size: int = Field(description="The number of items per page.")
+    total_count: int = Field(description="Total number of users matching the filter.")
+    total_pages: int

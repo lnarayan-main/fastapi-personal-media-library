@@ -51,6 +51,10 @@ class MediaRead(SQLModel):
     category_id: Optional[int]
     category: Optional[CategoryRead] = None 
     created_at: datetime
+    status: MediaStatus
 
+class MediaStatusUpdate(SQLModel):
+    id: int
+    status: MediaStatus
 
 

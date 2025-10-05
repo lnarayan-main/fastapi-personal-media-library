@@ -120,6 +120,7 @@ async def forgot_password(payload: ForgotPasswordRequest, session: Session = Dep
 
 @router.post("/auth/reset-password")
 async def reset_password(request: ResetPasswordRequest, session: Session = Depends(get_session)):
+    print("######################33",request)
     user = session.exec(select(User).where(User.reset_token == request.token)).first()
     if not user:
         raise HTTPException(status_code=400, detail="Invalid or expired token")
