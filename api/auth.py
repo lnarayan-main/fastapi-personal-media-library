@@ -1,5 +1,5 @@
 # backend/api/auth.py
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Form
 from sqlmodel import Session, select
 from datetime import timedelta
 
@@ -11,6 +11,14 @@ from config import ACCESS_TOKEN_EXPIRE_MINUTES
 from schemas.auth import Token, LoginRequest
 from models.user import User
 from services.auth_service import get_password_hash as _get_password_hash  # alias to avoid name clash
+import uuid
+
+from core.mail import fast_mail
+from fastapi_mail import MessageSchema
+
+from models.auth import ForgotPasswordRequest, ResetPasswordRequest
+from core.config import settings
+
 
 router = APIRouter()
 
@@ -77,3 +85,48 @@ def login_for_access_token(
         expires_delta=access_token_expires,
     )
     return Token(access_token=access_token, token_type="bearer")
+
+@router.post("/auth/forgot-password")
+async def forgot_password(payload: ForgotPasswordRequest, session: Session = Depends(get_session)):
+    user = session.exec(select(User).where(User.email == payload.email)).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Email not found")
+    
+    token = str(uuid.uuid4())
+    user.reset_token = token
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+
+    front_orgin_url = settings.FRONTEND_ORIGINS[0]
+
+    reset_link = f"{front_orgin_url}/reset-password/{token}"
+    html = f"""
+    <h3>Password Reset Request</h3>
+    <p>Click the link below to reset your password:</p>
+    <a href="{reset_link}">{reset_link}</a>
+    """
+
+    message = MessageSchema(
+        subject="Password Reset Request",
+        recipients=[payload.email],
+        body=html,
+        subtype="html"
+    )
+
+    await fast_mail.send_message(message)
+    return {"message": "Password reset email sent successfully"}
+
+
+@router.post("/auth/reset-password")
+async def reset_password(request: ResetPasswordRequest, session: Session = Depends(get_session)):
+    user = session.exec(select(User).where(User.reset_token == request.token)).first()
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid or expired token")
+
+    user.hashed_password = _get_password_hash(request.new_password)  
+    user.reset_token = None
+    session.add(user)
+    session.commit()
+    return {"message": "Password reset successful"}
+

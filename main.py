@@ -10,6 +10,7 @@ from database import create_db_and_tables, engine
 from api import auth, users, media, categories, dashboard
 from models.user import User
 from services.auth_service import get_password_hash
+from core.config import settings
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -46,14 +47,15 @@ def seed_admin():
             print("ℹ️ Admin user already exists")
 
 # CORS (same origins you had)
-origins = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-]
+# origins = [
+#     "http://localhost:5173",
+#     "http://127.0.0.1:5173",
+# ]
+
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=settings.FRONTEND_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

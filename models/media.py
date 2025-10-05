@@ -6,7 +6,6 @@ from datetime import datetime
 from schemas.category import CategoryRead
 
 class MediaType(str, PyEnum):
-    IMAGE = "image"
     VIDEO = "video"
     AUDIO = "audio"
 

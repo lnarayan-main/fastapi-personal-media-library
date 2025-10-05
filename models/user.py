@@ -37,6 +37,8 @@ class User(UserBase, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     media: List["Media"] = Relationship(back_populates="owner")
+    reset_token: Optional[str] = None
+    reset_token_expires_at: Optional[datetime] = None
 
 class UserRead(UserBase):
     id: int
