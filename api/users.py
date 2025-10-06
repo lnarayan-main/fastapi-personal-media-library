@@ -10,7 +10,7 @@ from models.user import User, UserStatusUpdate
 from services.file_service import safe_filename, save_upload_file, save_upload_file_async
 from config import UPLOAD_DIR
 from typing import List
-from schemas.user import PaginatedUsers, UserRole
+from schemas.user import PaginatedUsers, UserRole, UserRead
 
 router = APIRouter()
 
@@ -116,6 +116,13 @@ def users_list(
         total_pages=total_pages
     )
 
+@router.get("/users/{user_id}", response_model=UserRead)
+def user_view(user_id: int, current_user: User = Depends(get_current_user), session: Session = Depends(get_session)):
+    user = session.exec(select(User).where(User.id == user_id)).first()
+    if not user:
+        HTTPException(status_code=404, detail="User not found")
+    return user
+
 
 @router.post("/user/change-status")
 def changeUserStatus(
@@ -131,4 +138,23 @@ def changeUserStatus(
     session.commit()
     session.refresh(user)
     return {"status": 200, "detail": "Status changed successfully."}
+
+@router.get("/user/delete/{user_id}")
+def user_delete(user_id: int, current_user: User = Depends(get_current_user), session: Session = Depends(get_session)):
+    user = session.exec(select(User).where(User.id ==user_id)).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    if user.profile_pic_url:
+        file_path = user.profile_pic_url.lstrip("/")
+        if os.path.exists(file_path):
+            try:
+                os.remove(file_path)
+            except Exception as e:
+                print(f"Warning: Failed to delete {file_path}: {e}")
+
+    session.delete(user)
+    session.commit()
+    return {"status": 200, "detail": "User deleted successfully."}
+    
     

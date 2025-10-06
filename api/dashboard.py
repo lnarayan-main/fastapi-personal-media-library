@@ -18,12 +18,19 @@ def admin_dashboard(
 ):
     if current_user.role == UserRole.ADMIN:
         total_categories = session.exec(select(func.count(Category.id))).one()
-        total_media = session.exec(select(func.count(Media.id)).where(Media.status == MediaStatus.ACTIVE)).one()
-        total_users = session.exec(select(func.count(User.id)).where(User.role != UserRole.ADMIN).where(User.status == UserStatus.ACTIVE)).one()
+        total_media = session.exec(
+            select(func.count(Media.id))
+            # .where(Media.status == MediaStatus.ACTIVE)
+            ).one()
+        total_users = session.exec(
+            select(func.count(User.id))
+            .where(User.role != UserRole.ADMIN)
+            # .where(User.status == UserStatus.ACTIVE)
+            ).one()
 
         recent_media_statement = (
             select(Media)
-            .where(Media.status == MediaStatus.ACTIVE)
+            # .where(Media.status == MediaStatus.ACTIVE)
             .options(selectinload(Media.category))
             .order_by(Media.created_at.desc())
             .limit(5)
@@ -34,7 +41,7 @@ def admin_dashboard(
         recent_users_statement = (
             select(User)
             .where(User.role != UserRole.ADMIN)
-            .where(User.status == UserStatus.ACTIVE)
+            # .where(User.status == UserStatus.ACTIVE)
             .order_by(User.created_at.desc())
             .limit(5)
         )
@@ -50,11 +57,15 @@ def admin_dashboard(
         }
 
     elif current_user.role == UserRole.USER:
-        total_media = session.exec(select(func.count(Media.id)).where(Media.owner_id == current_user.id).where(Media.status == MediaStatus.ACTIVE)).one()
+        total_media = session.exec(
+            select(func.count(Media.id))
+            .where(Media.owner_id == current_user.id)
+            # .where(Media.status == MediaStatus.ACTIVE)
+            ).one()
 
         recent_media_statement = (
             select(Media)
-            .where(Media.status == MediaStatus.ACTIVE)
+            # .where(Media.status == MediaStatus.ACTIVE)
             .where(Media.owner_id == current_user.id)
             .options(selectinload(Media.category))
             .order_by(Media.created_at.desc())

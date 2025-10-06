@@ -9,7 +9,7 @@ from services.auth_service import ACCESS_TOKEN_EXPIRE_MINUTES as _unused # keep 
 from services.auth_service import oauth2_scheme  # imported to preserve previous behavior
 from config import ACCESS_TOKEN_EXPIRE_MINUTES
 from schemas.auth import Token, LoginRequest
-from models.user import User
+from models.user import User, UserBase, UserStatus
 from services.auth_service import get_password_hash as _get_password_hash  # alias to avoid name clash
 import uuid
 
@@ -22,7 +22,7 @@ from core.config import settings
 
 router = APIRouter()
 
-@router.post("/user/register", response_model=User, status_code=status.HTTP_201_CREATED)
+@router.post("/user/register", response_model=UserBase, status_code=status.HTTP_201_CREATED)
 def register_user(*, session: Session = Depends(get_session), user_in: dict):
     """
     NOTE: This endpoint keeps the original behavior where UserCreate is expected.
@@ -77,9 +77,19 @@ def login_for_access_token(
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    
+    if user.status != UserStatus.ACTIVE:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your account is inactive. Please contact admin.",
+            # headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    remember_me = getattr(form_data, "remember_me", False)
 
     # access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token_expires = timedelta(days=30) if form_data.remember_me else timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token_expires = timedelta(days=30) if remember_me else timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    
     access_token = create_access_token(
         data={"sub": user.email},
         expires_delta=access_token_expires,
