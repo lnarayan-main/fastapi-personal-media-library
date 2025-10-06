@@ -73,7 +73,7 @@ async def create_media(
     return media
 
 
-@router.get("/media/list", response_model=List[Media])
+@router.get("/media/list", response_model=List[MediaRead])
 def list_media(
     skip: int = 0,
     limit: int = 20,
@@ -88,7 +88,7 @@ def list_media(
 @router.get("/media/lists", response_model=List[Media])
 def list_media_all(
     skip: int = 0,
-    limit: int = 20,
+    limit: int = 50,
     session: Session = Depends(get_session),
 ):
     query = select(Media).offset(skip).limit(limit)
@@ -102,7 +102,7 @@ def get_media(
     session: Session = Depends(get_session),
     # current_user: User = Depends(get_current_user),
 ):
-    media = session.get(Media, media_id)
+    media = session.exec(select(Media).where(Media.id == media_id).options(selectinload(Media.category))).first()
     if not media:
         raise HTTPException(status_code=404, detail="Media not found")
     # if media.owner_id != current_user.id:
