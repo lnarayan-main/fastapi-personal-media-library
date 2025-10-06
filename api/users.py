@@ -139,7 +139,7 @@ def changeUserStatus(
     session.refresh(user)
     return {"status": 200, "detail": "Status changed successfully."}
 
-@router.get("/user/delete/{user_id}")
+@router.delete("/user/delete/{user_id}")
 def user_delete(user_id: int, current_user: User = Depends(get_current_user), session: Session = Depends(get_session)):
     user = session.exec(select(User).where(User.id ==user_id)).first()
     if not user:

@@ -14,7 +14,8 @@ from services.file_service import save_upload_file, save_upload_file_async
 from config import UPLOAD_DIR
 from models.media import Media, MediaStatusUpdate
 from models.user import User, UserRole
-from schemas.media import PaginatedMedia
+from schemas.media import PaginatedMedia, MediaRead
+from sqlalchemy.orm import selectinload 
 
 router = APIRouter()
 
@@ -260,3 +261,39 @@ def changeUserStatus(
     session.commit()
     session.refresh(media)
     return {"status": 200, "detail": "Status changed successfully."}
+
+
+@router.delete("/admin-media/delete/{media_id}")
+def admin_delete_media(
+    media_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    media = session.get(Media, media_id)
+    if not media:
+        raise HTTPException(status_code=404, detail="Media not found")
+
+    # Delete associated files (if exist)
+    if media.file_url and os.path.exists(media.file_url):
+        os.remove(media.file_url)
+
+    if media.thumbnail_url and os.path.exists(media.thumbnail_url):
+        os.remove(media.thumbnail_url)
+
+    # Remove from DB
+    session.delete(media)
+    session.commit()
+
+    return {"message": "Media deleted successfully"}
+
+
+@router.get("/media-view/{media_id}", response_model=MediaRead)
+def get_media(
+    media_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    media = session.exec(select(Media).where(Media.id == media_id).options(selectinload(Media.category))).first()
+    if not media:
+        raise HTTPException(status_code=404, detail="Media not found")
+    return media
