@@ -35,3 +35,7 @@ class PaginatedMedia(SQLModel):
     total_count: int = Field(description="Total number of media matching the filter.")
     total_pages: int
 
+
+class MediaWithRelatedCategoryMedia(SQLModel):
+    media: MediaRead
+    related_media: List[MediaRead]

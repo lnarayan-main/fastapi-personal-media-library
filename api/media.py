@@ -14,7 +14,7 @@ from services.file_service import save_upload_file, save_upload_file_async
 from config import UPLOAD_DIR
 from models.media import Media, MediaStatusUpdate
 from models.user import User, UserRole
-from schemas.media import PaginatedMedia, MediaRead
+from schemas.media import PaginatedMedia, MediaRead, MediaWithRelatedCategoryMedia
 from sqlalchemy.orm import selectinload 
 
 router = APIRouter()
@@ -96,7 +96,7 @@ def list_media_all(
     return media_list
 
 
-@router.get("/media/detail/{media_id}", response_model=Media)
+@router.get("/media/detail/{media_id}", response_model=MediaRead)
 def get_media(
     media_id: int,
     session: Session = Depends(get_session),
@@ -108,6 +108,23 @@ def get_media(
     # if media.owner_id != current_user.id:
     #     raise HTTPException(status_code=403, detail="Not authorized to view this media")
     return media
+
+
+@router.get("/media/{media_id}/details", response_model=MediaWithRelatedCategoryMedia)
+def get_media(
+    media_id: int,
+    session: Session = Depends(get_session),
+    # current_user: User = Depends(get_current_user),
+):
+    media = session.exec(select(Media).where(Media.id == media_id).options(selectinload(Media.category))).first()
+    if not media:
+        raise HTTPException(status_code=404, detail="Media not found")
+    related_media = session.exec(select(Media).where(Media.category_id == media.category_id)).all()
+
+    return {
+        'media': media,
+        'related_media': related_media
+    }
 
 
 @router.put("/media/update/{media_id}", response_model=Media)
