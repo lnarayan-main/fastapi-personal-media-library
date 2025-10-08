@@ -35,6 +35,8 @@ class Settings(BaseSettings):
     # frontend origins
     FRONTEND_ORIGINS: List[str]
 
+    OWNER_EMAIL: EmailStr
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

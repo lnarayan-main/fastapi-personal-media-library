@@ -1,4 +1,3 @@
-# backend/services/auth_service.py
 from datetime import datetime, timedelta, timezone
 from pwdlib import PasswordHash
 import jwt

@@ -1,4 +1,3 @@
-# backend/main.py
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -7,7 +6,7 @@ from sqlmodel import Session, select
 import os
 
 from database import create_db_and_tables, engine
-from api import auth, users, media, categories, dashboard
+from api import auth, users, media, categories, dashboard, general_api
 from models.user import User
 from services.auth_service import get_password_hash
 from core.config import settings
@@ -70,6 +69,7 @@ app.include_router(users.router)
 app.include_router(media.router)
 app.include_router(categories.router)
 app.include_router(dashboard.router)
+app.include_router(general_api.router)
 
 
 # Root test endpoint (kept)

@@ -1,4 +1,3 @@
-# backend/api/users.py
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Query
 import os
 from sqlmodel import Session, select, func

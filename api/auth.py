@@ -1,4 +1,3 @@
-# backend/api/auth.py
 from fastapi import APIRouter, Depends, HTTPException, status, Form
 from sqlmodel import Session, select
 from datetime import timedelta
@@ -22,7 +21,7 @@ from core.config import settings
 
 router = APIRouter()
 
-@router.post("/user/register", response_model=UserBase, status_code=status.HTTP_201_CREATED)
+@router.post("/user/register", status_code=status.HTTP_201_CREATED)
 def register_user(*, session: Session = Depends(get_session), user_in: dict):
     """
     NOTE: This endpoint keeps the original behavior where UserCreate is expected.
@@ -57,7 +56,7 @@ def register_user(*, session: Session = Depends(get_session), user_in: dict):
     session.add(db_user)
     session.commit()
     session.refresh(db_user)
-    return db_user
+    return {"message": "Registration successful"}
 
 
 @router.post("/auth/login", response_model=Token)

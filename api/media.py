@@ -1,4 +1,3 @@
-# backend/api/media.py
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Query
 from typing import List, Optional
 import os
@@ -119,7 +118,15 @@ def get_media(
     media = session.exec(select(Media).where(Media.id == media_id).options(selectinload(Media.category))).first()
     if not media:
         raise HTTPException(status_code=404, detail="Media not found")
-    related_media = session.exec(select(Media).where(Media.category_id == media.category_id)).all()
+    # related_media = session.exec(select(Media).where(Media.category_id == media.category_id)).all()
+
+    related_media = session.exec(
+        select(Media)
+        .where(
+            (Media.category_id == media.category_id) & 
+            (Media.id != media_id)                     
+        )
+    ).all()
 
     return {
         'media': media,

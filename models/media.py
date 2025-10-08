@@ -1,4 +1,3 @@
-# backend/models/media.py
 from typing import Optional
 from sqlmodel import Field, SQLModel, Relationship
 from enum import Enum as PyEnum

@@ -1,4 +1,3 @@
-# backend/models/user.py
 from typing import Optional, List
 from sqlmodel import Field, SQLModel, Relationship
 from enum import Enum as PyEnum
