@@ -3,3 +3,4 @@
 from .user import *
 from .media import *
 from .category import *
+from .media_interaction import *

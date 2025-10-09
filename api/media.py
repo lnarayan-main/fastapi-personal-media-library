@@ -10,13 +10,17 @@ from sqlmodel import Session, select, func
 from database import get_session
 from services.auth_service import get_current_user
 from services.file_service import save_upload_file, save_upload_file_async
-from config import UPLOAD_DIR
 from models.media import Media, MediaStatusUpdate
 from models.user import User, UserRole
+from models.media_interaction import Comment, MediaReaction
 from schemas.media import PaginatedMedia, MediaRead, MediaWithRelatedCategoryMedia
 from sqlalchemy.orm import selectinload 
+from core.config import settings
+from schemas.media_response import MediaResponse, CommentResponse, MediaReactionSummary
 
 router = APIRouter()
+
+UPLOAD_DIR=settings.UPLOAD_MEDIA_DIR
 
 @router.post("/media/create", response_model=Media)
 async def create_media(
@@ -95,7 +99,7 @@ def list_media_all(
     return media_list
 
 
-@router.get("/media/detail/{media_id}", response_model=MediaRead)
+@router.get("/media/detail/{media_id}", response_model=MediaResponse)
 def get_media(
     media_id: int,
     session: Session = Depends(get_session),
@@ -104,12 +108,40 @@ def get_media(
     media = session.exec(select(Media).where(Media.id == media_id).options(selectinload(Media.category))).first()
     if not media:
         raise HTTPException(status_code=404, detail="Media not found")
-    # if media.owner_id != current_user.id:
-    #     raise HTTPException(status_code=403, detail="Not authorized to view this media")
-    return media
+    
+    # Comments
+    comments = session.exec(
+        select(Comment).where(Comment.media_id == media_id).order_by(Comment.created_at.desc())
+    ).all()
+
+    likes_count = session.exec(
+        select(func.count()).where(MediaReaction.media_id == media_id, MediaReaction.is_like == True)
+    ).one()
+
+    dislikes_count = session.exec(
+        select(func.count()).where(MediaReaction.media_id == media_id, MediaReaction.is_like == False)
+    ).one()
+
+    return MediaResponse(
+        media=media,
+        reactions=MediaReactionSummary(
+            likes=likes_count,
+            dislikes=dislikes_count
+        ),
+        comments=[
+            CommentResponse(
+                id=c.id,
+                user_id=c.user_id,
+                content=c.content,
+                created_at=c.created_at
+            )
+            for c in comments
+        ]
+    )
 
 
-@router.get("/media/{media_id}/details", response_model=MediaWithRelatedCategoryMedia)
+# @router.get("/media/{media_id}/details", response_model=MediaWithRelatedCategoryMedia)
+@router.get("/media/{media_id}/details")
 def get_media(
     media_id: int,
     session: Session = Depends(get_session),
@@ -118,7 +150,19 @@ def get_media(
     media = session.exec(select(Media).where(Media.id == media_id).options(selectinload(Media.category))).first()
     if not media:
         raise HTTPException(status_code=404, detail="Media not found")
-    # related_media = session.exec(select(Media).where(Media.category_id == media.category_id)).all()
+   
+    # Comments
+    comments = session.exec(
+        select(Comment).where(Comment.media_id == media_id).order_by(Comment.created_at.desc())
+    ).all()
+
+    likes_count = session.exec(
+        select(func.count()).where(MediaReaction.media_id == media_id, MediaReaction.is_like == True)
+    ).one()
+
+    dislikes_count = session.exec(
+        select(func.count()).where(MediaReaction.media_id == media_id, MediaReaction.is_like == False)
+    ).one()
 
     related_media = session.exec(
         select(Media)
@@ -126,11 +170,25 @@ def get_media(
             (Media.category_id == media.category_id) & 
             (Media.id != media_id)                     
         )
+        .options(selectinload(Media.category))
     ).all()
 
     return {
         'media': media,
-        'related_media': related_media
+        'reactions': MediaReactionSummary(
+            likes=likes_count,
+            dislikes=dislikes_count
+        ),
+        'comments': [
+            CommentResponse(
+                id=c.id,
+                user_id=c.user_id,
+                content=c.content,
+                created_at=c.created_at
+            )
+            for c in comments
+        ],
+        'related_media': related_media,
     }
 
 

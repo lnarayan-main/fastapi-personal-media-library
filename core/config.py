@@ -17,9 +17,13 @@ class Settings(BaseSettings):
     # 3️⃣ Uploads
     UPLOAD_DIR: str
 
+    UPLOAD_MEDIA_DIR: str
+    UPLOAD_PROFILE_DIR: str
+
     # 4️⃣ Admin seed
     ADMIN_EMAIL: EmailStr
     ADMIN_PASSWORD: str
+    ADMIN_NAME: str
 
     # 5️⃣ Email config
     MAIL_USERNAME: EmailStr

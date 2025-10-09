@@ -4,13 +4,12 @@ from datetime import timedelta
 
 from database import get_session
 from services.auth_service import authenticate_user, create_access_token, get_password_hash
-from services.auth_service import ACCESS_TOKEN_EXPIRE_MINUTES as _unused # keep consistent (not used)
 from services.auth_service import oauth2_scheme  # imported to preserve previous behavior
-from config import ACCESS_TOKEN_EXPIRE_MINUTES
 from schemas.auth import Token, LoginRequest
 from models.user import User, UserBase, UserStatus
 from services.auth_service import get_password_hash as _get_password_hash  # alias to avoid name clash
 import uuid
+from core.config import settings
 
 from core.mail import fast_mail
 from fastapi_mail import MessageSchema
@@ -86,8 +85,8 @@ def login_for_access_token(
     
     remember_me = getattr(form_data, "remember_me", False)
 
-    # access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token_expires = timedelta(days=30) if remember_me else timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    # access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token_expires = timedelta(days=30) if remember_me else timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     
     access_token = create_access_token(
         data={"sub": user.email},

@@ -4,7 +4,8 @@ import time
 from uuid import uuid4
 import shutil
 from fastapi import UploadFile
-from config import UPLOAD_DIR
+from core.config import settings
+
 
 def safe_filename(user_id: int, original_filename: str) -> str:
     # Remove unwanted characters and spaces, replace with underscores

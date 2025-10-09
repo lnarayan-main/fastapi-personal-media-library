@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List
 from sqlmodel import Field, SQLModel, Relationship
 from enum import Enum as PyEnum
 from datetime import datetime
@@ -29,6 +29,9 @@ class Media(SQLModel, table=True):
     # Relationships
     category: Optional["Category"] = Relationship(back_populates="media")
     owner: "User" = Relationship(back_populates="media")
+
+    comments: List["Comment"] = Relationship(back_populates="media")
+    reactions: List["MediaReaction"] = Relationship(back_populates="media")
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)

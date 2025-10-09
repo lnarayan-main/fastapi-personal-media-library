@@ -6,9 +6,9 @@ from fastapi.security import OAuth2PasswordBearer
 from jwt.exceptions import InvalidTokenError
 from sqlmodel import Session, select
 
-from config import SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES
 from database import get_session
 from models.user import User
+from core.config import settings
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")  # kept (tokenUrl unused but preserved)
 
@@ -27,7 +27,7 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None):
     else:
         expire = datetime.now(timezone.utc) + timedelta(minutes=15)
     to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     return encoded_jwt
 
 def authenticate_user(session: Session, email: str, password: str):
@@ -40,7 +40,7 @@ def authenticate_user(session: Session, email: str, password: str):
 
 def decode_token_raise(token: str):
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         return payload
     except InvalidTokenError:
         raise HTTPException(

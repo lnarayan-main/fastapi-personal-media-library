@@ -7,9 +7,9 @@ from database import get_session
 from services.auth_service import get_current_user, require_admin
 from models.user import User, UserStatusUpdate
 from services.file_service import safe_filename, save_upload_file, save_upload_file_async
-from config import UPLOAD_DIR
 from typing import List
 from schemas.user import PaginatedUsers, UserRole, UserRead
+from core.config import settings
 
 router = APIRouter()
 
@@ -49,7 +49,7 @@ def update_profile(
 
     # Handle file upload
     if profile_pic:
-        upload_dir = "static/profile_pics"
+        upload_dir = settings.UPLOAD_PROFILE_DIR
         os.makedirs(upload_dir, exist_ok=True)
 
         # Delete old profile pic

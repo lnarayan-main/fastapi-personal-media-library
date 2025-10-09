@@ -16,3 +16,4 @@ venv/
 
 #Static files
 static/
+requirements_old.txt
