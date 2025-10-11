@@ -147,7 +147,8 @@ def get_media(
     session: Session = Depends(get_session),
     # current_user: User = Depends(get_current_user),
 ):
-    media = session.exec(select(Media).where(Media.id == media_id).options(selectinload(Media.category))).first()
+    media = session.exec(select(Media).where(Media.id == media_id)).first()
+
     if not media:
         raise HTTPException(status_code=404, detail="Media not found")
    
@@ -173,8 +174,10 @@ def get_media(
         .options(selectinload(Media.category))
     ).all()
 
+    media_read = MediaRead.model_validate(media)
+
     return {
-        'media': media,
+        'media': media_read,
         'reactions': MediaReactionSummary(
             likes=likes_count,
             dislikes=dislikes_count
@@ -267,8 +270,8 @@ def delete_media(
     current_user: User = Depends(get_current_user),
 ):
     media = session.get(Media, media_id)
-    if not media:
-        raise HTTPException(status_code=404, detail="Media not found")
+    # if not media:
+    #     raise HTTPException(status_code=404, detail="Media not found")
 
     if media.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized to delete this media")
@@ -375,7 +378,8 @@ def get_media(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
-    media = session.exec(select(Media).where(Media.id == media_id).options(selectinload(Media.category))).first()
+    # media = session.exec(select(Media).where(Media.id == media_id).options(selectinload(Media.category))).first()
+    media = session.exec(select(Media).where(Media.id == media_id)).first()
     if not media:
         raise HTTPException(status_code=404, detail="Media not found")
     return media

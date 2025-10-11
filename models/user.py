@@ -20,7 +20,7 @@ class UserStatus(PyEnum):
 class UserBase(SQLModel):
     name: str = Field(min_length=3, max_length=100)
     email: str = Field(unique=True, index=True, max_length=100)
-    status: UserStatus = Field(default=UserStatus.PENDING_VERIFICATION, sa_column_kwargs={"default": UserStatus.PENDING_VERIFICATION})
+    status: UserStatus = Field(default=UserStatus.ACTIVE, sa_column_kwargs={"default": UserStatus.ACTIVE})
     role: UserRole = Field(default=UserRole.USER)
     profile_pic_url: Optional[str] = None
     about: Optional[str] = None

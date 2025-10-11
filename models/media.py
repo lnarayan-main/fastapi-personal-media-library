@@ -28,7 +28,8 @@ class Media(SQLModel, table=True):
 
     # Relationships
     category: Optional["Category"] = Relationship(back_populates="media")
-    owner: "User" = Relationship(back_populates="media")
+    # owner: "User" = Relationship(back_populates="media")
+    owner: Optional["User"] = Relationship(back_populates="media")
 
     comments: List["Comment"] = Relationship(back_populates="media")
     reactions: List["MediaReaction"] = Relationship(back_populates="media")

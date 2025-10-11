@@ -2,6 +2,7 @@ from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
 from schemas.category import CategoryRead
+from schemas.user import UserRead
 from sqlmodel import SQLModel, Field
 from models.media import MediaStatus
 
@@ -23,6 +24,7 @@ class MediaRead(BaseModel):
     created_at: datetime
     category: Optional[CategoryRead] = None
     status: MediaStatus
+    owner: Optional[UserRead] = None
 
     class Config:
         from_attributes = True 
