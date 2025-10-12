@@ -4,3 +4,4 @@ from .user import *
 from .category import *
 from .media import *
 from .media_interaction import *
+from .comment_interaction import *

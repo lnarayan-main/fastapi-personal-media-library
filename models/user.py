@@ -35,10 +35,16 @@ class User(UserBase, table=True):
     hashed_password: str
     created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
-    media: List["Media"] = Relationship(back_populates="owner")
+    media: List["Media"] = Relationship(back_populates="user")
     reset_token: Optional[str] = None
     reset_token_expires_at: Optional[datetime] = None
-    comments: List["Comment"] = Relationship(back_populates="owner")
+    # comments: List["Comment"] = Relationship(back_populates="owner")
+    
+    comments: List["Comment"] = Relationship(back_populates="user")
+
+    media_reactions: List["MediaReaction"] = Relationship(back_populates="user")
+    comment_replies: List["CommentReply"] = Relationship(back_populates="user")
+    comment_reactions: List["CommentReaction"] = Relationship(back_populates="user")
 
 class UserRead(UserBase):
     id: int

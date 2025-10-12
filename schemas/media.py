@@ -24,7 +24,7 @@ class MediaRead(BaseModel):
     created_at: datetime
     category: Optional[CategoryRead] = None
     status: MediaStatus
-    owner: Optional[UserRead] = None
+    user: Optional[UserRead] = None
     views: int
 
     class Config:

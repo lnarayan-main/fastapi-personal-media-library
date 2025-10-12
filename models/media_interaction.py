@@ -13,7 +13,12 @@ class Comment(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
     media: Optional["Media"] = Relationship(back_populates="comments")
-    owner: Optional["User"] = Relationship(back_populates="comments")
+    user: Optional["User"] = Relationship(back_populates="comments")
+
+    replies: List["CommentReply"] = Relationship(back_populates="comment")
+
+    reactions: List["CommentReaction"] = Relationship(back_populates="comment")
+
 
 
 class MediaReaction(SQLModel, table=True):
@@ -23,5 +28,6 @@ class MediaReaction(SQLModel, table=True):
     media_id: int = Field(foreign_key="media.id")
     is_like: bool
 
+    user: Optional["User"] = Relationship(back_populates="media_reactions")
     media: Optional["Media"] = Relationship(back_populates="reactions")
 

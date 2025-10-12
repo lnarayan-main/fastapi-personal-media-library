@@ -95,7 +95,7 @@ from models.user import User
 from services.auth_service import get_password_hash
 from core.config import settings
 
-from api import auth, users, media, categories, dashboard, general_api, media_interactions
+from api import auth, users, media, categories, dashboard, general_api, media_interactions, comment_interactions
 
 
 def seed_admin():
@@ -150,6 +150,7 @@ app.include_router(categories.router)
 app.include_router(dashboard.router)
 app.include_router(general_api.router)
 app.include_router(media_interactions.router)
+app.include_router(comment_interactions.router)
 
 
 @app.get("/")

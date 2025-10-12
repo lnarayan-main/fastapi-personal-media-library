@@ -17,6 +17,9 @@ from schemas.media import PaginatedMedia, MediaRead, MediaWithRelatedCategoryMed
 from sqlalchemy.orm import selectinload 
 from core.config import settings
 from schemas.media_response import MediaResponse, CommentResponse, MediaReactionSummary
+from schemas.user import UserRead
+from schemas.comment_interaction import CommentReactionsData
+from models.comment_interaction import CommentReaction
 
 router = APIRouter()
 
@@ -176,21 +179,35 @@ def get_media(
 
     media_read = MediaRead.model_validate(media)
 
+    comment_responses = []
+    for c in comments:
+        # ✅ Fetch owner info
+        owner = session.exec(select(User).where(User.id == c.user_id)).first()
+        owner_data = UserRead.model_validate(owner)
+
+        # ✅ Fetch reactions for this comment
+        reactions = session.exec(select(CommentReaction).where(CommentReaction.comment_id == c.id)).all()
+        reaction_data = [CommentReactionsData.model_validate(r) for r in reactions]
+
+        # ✅ Build response object
+        comment_responses.append(
+            CommentResponse(
+                id=c.id,
+                user_id=c.user_id,
+                content=c.content,
+                created_at=c.created_at,
+                user=owner_data,
+                reactions=reaction_data
+            )
+        )
+
     return {
         'media': media_read,
         'reactions': MediaReactionSummary(
             likes=likes_count,
             dislikes=dislikes_count
         ),
-        'comments': [
-            CommentResponse(
-                id=c.id,
-                user_id=c.user_id,
-                content=c.content,
-                created_at=c.created_at
-            )
-            for c in comments
-        ],
+        'comments': comment_responses,
         # 'related_media': related_media,
         "related_media": [MediaRead.model_validate(m) for m in related_media]
     }
