@@ -25,6 +25,7 @@ class MediaRead(BaseModel):
     category: Optional[CategoryRead] = None
     status: MediaStatus
     owner: Optional[UserRead] = None
+    views: int
 
     class Config:
         from_attributes = True 

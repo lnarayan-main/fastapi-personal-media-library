@@ -28,11 +28,12 @@ class Media(SQLModel, table=True):
 
     # Relationships
     category: Optional["Category"] = Relationship(back_populates="media")
-    # owner: "User" = Relationship(back_populates="media")
     owner: Optional["User"] = Relationship(back_populates="media")
 
     comments: List["Comment"] = Relationship(back_populates="media")
     reactions: List["MediaReaction"] = Relationship(back_populates="media")
+
+    views: int = Field(default=0)
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
@@ -55,6 +56,7 @@ class MediaRead(SQLModel):
     category: Optional[CategoryRead] = None 
     created_at: datetime
     status: MediaStatus
+    views: int
 
 class MediaStatusUpdate(SQLModel):
     id: int

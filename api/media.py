@@ -384,3 +384,16 @@ def get_media(
     if not media:
         raise HTTPException(status_code=404, detail="Media not found")
     return media
+
+
+
+@router.post("/media/views/{media_id}")
+def increment_media_views(media_id: int, session: Session = Depends(get_session)):
+    media = session.exec(select(Media).where(Media.id == media_id)).first()
+    if not media:
+        raise HTTPException(status_code=404, detail="Media not found")
+    media.views += 1
+    session.add(media)
+    session.commit()
+    session.refresh(media)
+    return {'message': "Media views incremented"}
