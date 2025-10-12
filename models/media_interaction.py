@@ -13,6 +13,7 @@ class Comment(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
     media: Optional["Media"] = Relationship(back_populates="comments")
+    owner: Optional["User"] = Relationship(back_populates="comments")
 
 
 class MediaReaction(SQLModel, table=True):

@@ -6,6 +6,8 @@ from models.user import User
 from models.media_interaction import Comment, MediaReaction
 from services.auth_service import get_current_user
 from schemas.media_interaction import LikeDisLikeRequest, CommentRequest
+from schemas.media_response import CommentResponse
+from typing import List
 
 router = APIRouter()
 
@@ -20,7 +22,7 @@ def add_comment(media_id: int, payload: CommentRequest, session: Session = Depen
     session.refresh(comment)
     return {'message': "Comment added successfully."}
 
-@router.get('/media/{media_id}/comments')
+@router.get('/media/{media_id}/comments', response_model=List[CommentResponse])
 def get_comments(media_id: int, session: Session = Depends(get_session)):
     comments = session.exec(select(Comment).where(Comment.media_id == media_id).order_by(Comment.created_at.desc())).all()
     return comments

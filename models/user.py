@@ -38,6 +38,7 @@ class User(UserBase, table=True):
     media: List["Media"] = Relationship(back_populates="owner")
     reset_token: Optional[str] = None
     reset_token_expires_at: Optional[datetime] = None
+    comments: List["Comment"] = Relationship(back_populates="owner")
 
 class UserRead(UserBase):
     id: int

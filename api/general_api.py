@@ -1,9 +1,14 @@
-from fastapi import APIRouter, status, HTTPException
+from fastapi import APIRouter, status, HTTPException, Depends
 from schemas.contact_us import ContactUsMessage
+from schemas.user import UserRead
+from models.media import Media
+from models.user import User
 
 from core.mail import fast_mail
 from fastapi_mail import MessageSchema
 from core.config import settings
+from database import get_session
+from sqlmodel import Session, select
 
 router = APIRouter()
 

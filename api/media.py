@@ -88,7 +88,7 @@ def list_media(
     return media_list
 
 
-@router.get("/media/lists", response_model=List[Media])
+@router.get("/media/lists", response_model=List[MediaRead])
 def list_media_all(
     skip: int = 0,
     limit: int = 50,
@@ -191,7 +191,8 @@ def get_media(
             )
             for c in comments
         ],
-        'related_media': related_media,
+        # 'related_media': related_media,
+        "related_media": [MediaRead.model_validate(m) for m in related_media]
     }
 
 
