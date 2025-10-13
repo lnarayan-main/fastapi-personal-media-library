@@ -3,19 +3,16 @@ from sqlmodel import Session, select
 from datetime import timedelta
 
 from database import get_session
-from services.auth_service import authenticate_user, create_access_token, get_password_hash
-from services.auth_service import oauth2_scheme  # imported to preserve previous behavior
+from services.auth_service import authenticate_user, create_access_token, get_password_hash, get_current_user, verify_password
 from schemas.auth import Token, LoginRequest
 from models.user import User, UserBase, UserStatus
-from services.auth_service import get_password_hash as _get_password_hash  # alias to avoid name clash
 import uuid
 from core.config import settings
 
 from core.mail import fast_mail
 from fastapi_mail import MessageSchema
 
-from models.auth import ForgotPasswordRequest, ResetPasswordRequest
-from core.config import settings
+from models.auth import ForgotPasswordRequest, ResetPasswordRequest, ChangePasswordRequest
 
 
 router = APIRouter()
@@ -42,7 +39,7 @@ def register_user(*, session: Session = Depends(get_session), user_in: dict):
             detail="Email already registered."
         )
 
-    hashed_password = _get_password_hash(password)
+    hashed_password = get_password_hash(password)
 
     # prepare user data (similar to original main.py)
     user_data = {
@@ -180,9 +177,24 @@ async def reset_password(request: ResetPasswordRequest, session: Session = Depen
     if not user:
         raise HTTPException(status_code=400, detail="Invalid or expired token")
 
-    user.hashed_password = _get_password_hash(request.new_password)  
+    user.hashed_password = get_password_hash(request.new_password)  
     user.reset_token = None
     session.add(user)
     session.commit()
-    return {"message": "Password reset successful"}
+    return {"message": "Password reset successful."}
+
+
+@router.post("/auth/change-password")
+async def change_password(request: ChangePasswordRequest, session: Session = Depends(get_session), current_user: User = Depends(get_current_user)):
+    user = session.exec(select(User).where(User.id == current_user.id)).first()
+    if not user:
+        raise HTTPException(status_code=400, detail="User not found")
+    
+    if not verify_password(request.current_password, current_user.hashed_password):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Current password is incorrect.")
+
+    user.hashed_password = get_password_hash(request.new_password)  
+    session.add(user)
+    session.commit()
+    return {"message": "Password changed successfull."}
 
