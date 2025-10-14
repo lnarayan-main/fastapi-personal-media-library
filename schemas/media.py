@@ -41,3 +41,6 @@ class PaginatedMedia(SQLModel):
 class MediaWithRelatedCategoryMedia(SQLModel):
     media: MediaRead
     related_media: List[MediaRead]
+
+    class Config:
+        from_attributes = True

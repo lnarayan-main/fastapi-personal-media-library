@@ -1,4 +1,4 @@
-from fastapi_mail import FastMail, MessageSchema, ConnectionConfig
+from fastapi_mail import FastMail, MessageSchema, ConnectionConfig, MessageType
 from core.config import settings
 
 conf = ConnectionConfig(
@@ -8,10 +8,12 @@ conf = ConnectionConfig(
     MAIL_PORT=settings.MAIL_PORT,
     MAIL_SERVER=settings.MAIL_SERVER,
     MAIL_FROM_NAME=settings.MAIL_FROM_NAME,
+
     MAIL_STARTTLS=settings.MAIL_STARTTLS,
     MAIL_SSL_TLS=settings.MAIL_SSL_TLS,
     USE_CREDENTIALS=settings.USE_CREDENTIALS,
-    VALIDATE_CERTS=True
+    VALIDATE_CERTS=True,
+    # MAIL_TEMPLATE_BODY_TYPE=MessageType.html
 )
 
 fast_mail = FastMail(conf)

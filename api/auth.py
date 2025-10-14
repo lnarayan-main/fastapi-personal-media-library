@@ -10,7 +10,7 @@ import uuid
 from core.config import settings
 
 from core.mail import fast_mail
-from fastapi_mail import MessageSchema
+from fastapi_mail import MessageSchema, MessageType, MultipartSubtypeEnum
 
 from models.auth import ForgotPasswordRequest, ResetPasswordRequest, ChangePasswordRequest
 
@@ -91,83 +91,63 @@ def login_for_access_token(
     )
     return Token(access_token=access_token, token_type="bearer")
 
-@router.post("/auth/forgot-password_old")
-async def forgot_password(payload: ForgotPasswordRequest, session: Session = Depends(get_session)):
-    user = session.exec(select(User).where(User.email == payload.email)).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="Email not found")
-    
-    token = str(uuid.uuid4())
-    user.reset_token = token
-    session.add(user)
-    session.commit()
-    session.refresh(user)
-
-    front_orgin_url = settings.FRONTEND_ORIGINS[0]
-
-    reset_link = f"{front_orgin_url}/reset-password/{token}"
-    html = f"""
-    <h3>Password Reset Request</h3>
-    <p>Click the link below to reset your password:</p>
-    <a href="{reset_link}">{reset_link}</a>
-    """
-
-    message = MessageSchema(
-        subject="Password Reset Request",
-        recipients=[payload.email],
-        body=html,
-        subtype="html"
-    )
-
-    await fast_mail.send_message(message)
-    return {"message": "Password reset email sent successfully"}
 
 @router.post("/auth/forgot-password")
-async def forgot_password(payload: ForgotPasswordRequest, session: Session = Depends(get_session)):
-    # 1. Database Lookup
+async def forgot_password(
+    payload: ForgotPasswordRequest, 
+    background_tasks: BackgroundTasks, 
+    session: Session = Depends(get_session)
+):
     user = session.exec(select(User).where(User.email == payload.email)).first()
     if not user:
         raise HTTPException(status_code=404, detail="Email not found")
-    
+
     try:
         token = str(uuid.uuid4())
         user.reset_token = token
+        
         session.add(user)
         session.commit()
         session.refresh(user)
+        
     except Exception as db_error:
-        print(f"Database error during token update: {db_error}")
-        raise HTTPException(status_code=500, detail="Could not generate reset token.")
-
-
+        print(f"Database error during token update for {payload.email}: {db_error}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Could not generate reset token.")
+    
     try:
         front_orgin_url = settings.FRONTEND_ORIGINS[0] 
-
         reset_link = f"{front_orgin_url}/reset-password/{token}"
+        
         html = f"""
         <h3>Password Reset Request</h3>
         <p>Click the link below to reset your password:</p>
-        <a href="{reset_link}">{reset_link}</a>
+        <p><a href="{reset_link}">Reset Password Link</a></p>
         """
 
-        message = MessageSchema(
+        messageData = MessageSchema(
             subject="Password Reset Request",
             recipients=[payload.email],
             body=html,
-            subtype="html"
+            subtype=MessageType.html,
+            multipart_subtype=MultipartSubtypeEnum.alternative  
         )
 
-        await fast_mail.send_message(message)
+        background_tasks.add_task(
+            fast_mail.send_message, 
+            messageData, 
+            MessageType.html
+        )
         
-        return {"message": "Password reset email sent successfully"}
+        return {"message": "Password reset email successfully scheduled for sending."}
 
     except IndexError:
         print("Configuration Error: FRONTEND_ORIGINS is empty.")
-        raise HTTPException(status_code=500, detail="Server configuration error (Frontend URL missing).")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Server configuration error (Frontend URL missing).")
         
     except Exception as email_error:
-        print(f"Email sending failed for user {payload.email}: {email_error}")
-        raise HTTPException(status_code=500, detail="Failed to send password reset email.")
+        print(f"Email scheduling failed for user {payload.email}: {email_error}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to schedule password reset email.")
+
 
 
 

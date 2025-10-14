@@ -25,6 +25,9 @@ class UserBase(SQLModel):
     profile_pic_url: Optional[str] = None
     about: Optional[str] = None
 
+    class Config:
+        from_attributes = True
+
 class UserCreate(UserBase):
     password: str = Field(min_length=8, max_length=32)
 
@@ -50,6 +53,9 @@ class UserRead(UserBase):
     id: int
     role: UserRole
     created_at : datetime
+
+    class Config:
+        from_attributes = True
 
 class UserUpdate(SQLModel):
     name: Optional[str] = None

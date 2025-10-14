@@ -58,6 +58,9 @@ class MediaRead(SQLModel):
     status: MediaStatus
     views: int
 
+    class Config:
+        from_attributes = True
+
 class MediaStatusUpdate(SQLModel):
     id: int
     status: MediaStatus

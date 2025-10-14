@@ -17,3 +17,5 @@ venv/
 #Static files
 static/
 requirements_old.txt
+requirements_old_working_for_email_sending.txt
+
