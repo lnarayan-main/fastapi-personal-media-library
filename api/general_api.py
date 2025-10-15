@@ -1,6 +1,7 @@
 from fastapi import APIRouter, status, HTTPException, Depends, BackgroundTasks
 from schemas.contact_us import ContactUsMessage
 from schemas.user import UserRead
+from schemas.media import MediaRead
 from models.media import Media
 from models.user import User
 
@@ -51,3 +52,21 @@ async def contact_us_message(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
             detail="Failed to schedule the message delivery. Please try again later."
         )
+    
+
+@router.get("/users/{user_id}/profile", response_model=UserRead)
+def get_user_profile(user_id: int, session: Session = Depends(get_session)):
+    user = session.exec(select(User).where(User.id == user_id)).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found.")
+
+    return user
+    
+@router.get("/media/user/{user_id}", response_model=list[MediaRead])
+def get_user_media(user_id: int, session: Session = Depends(get_session)):
+    query = select(Media).where(Media.owner_id == user_id)
+    media = session.exec(query).all()
+    if not media:
+        raise HTTPException(status_code=404, detail="Media not found.")
+
+    return media

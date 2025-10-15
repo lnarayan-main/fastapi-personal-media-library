@@ -99,7 +99,7 @@ def convert_to_hls(video_path: Path, output_dir: Path):
             "-hls_time", "10",
             "-hls_list_size", "0",
             "-f", "hls",
-            str(output_dir / "index.m3u8"),
+            str(output_dir / "master.m3u8"),
         ]
         subprocess.run(cmd, check=True)
         print(f"✅ HLS conversion complete for {video_path}")
@@ -167,6 +167,25 @@ def get_audio_metadata(file_path: str):
         "bit_rate": bit_rate,
     }
 
+def convert_audio_to_hls(input_path: Path, output_dir: Path):
+    """Convert audio file to HLS (for adaptive streaming)."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+    hls_master = output_dir / "master.m3u8"
+
+    cmd = [
+        "ffmpeg", "-i", str(input_path),
+        "-vn",  # no video
+        "-c:a", "aac",
+        "-b:a", "128k",
+        "-hls_time", "10",
+        "-hls_playlist_type", "vod",
+        "-hls_segment_filename", str(output_dir / "audio_%03d.aac"),
+        str(hls_master)
+    ]
+
+    subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    return str(hls_master)
+
 MEDIA_UPLOAD_DIR = Path("static/media/uploads")
 HLS_OUTPUT_DIR = Path("static/media/hls")
 THUMBNAIL_DIR = Path("static/media/thumbnails")
@@ -195,13 +214,18 @@ async def create_media(
     duration = None
     if media_type == 'audio':
         file_ext = os.path.splitext(file.filename)[1]
-        unique_name = f"{current_user.id}_{uuid4().hex}{file_ext}"
+        unique_folder_name = f"{current_user.id}_{uuid4().hex}"
+        unique_name = f"{unique_folder_name}{file_ext}"
         file_path = os.path.join(MEDIA_UPLOAD_DIR, unique_name)
 
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
         file_url = file_path
+
+        output_dir = HLS_OUTPUT_DIR / unique_folder_name
+        background_tasks.add_task(convert_audio_to_hls, file_url, output_dir)
+        hls_path = f"{output_dir}/master.m3u8"
 
         if thumbnail:
             thumb_ext = os.path.splitext(thumbnail.filename)[1]
@@ -219,7 +243,9 @@ async def create_media(
         if not file.filename.endswith((".mp4", ".mov", ".mkv")):
             raise HTTPException(status_code=400, detail="Unsupported video format")
         
-        unique_name = f"{current_user.id}_{uuid4().hex}"
+        file_ext = os.path.splitext(file.filename)[1]
+        unique_folder_name = f"{current_user.id}_{uuid4().hex}"
+        unique_name = f"{unique_folder_name}{file_ext}"
 
         file_url = MEDIA_UPLOAD_DIR / unique_name
         with open(file_url, "wb") as f:
@@ -231,11 +257,11 @@ async def create_media(
         thumbnail_url = generate_thumbnail(file_url, THUMBNAIL_DIR, duration)
 
         # Prepare output directory for HLS
-        output_dir = HLS_OUTPUT_DIR / unique_name
+        output_dir = HLS_OUTPUT_DIR / unique_folder_name
         # Run conversion in background
         background_tasks.add_task(convert_to_hls, file_url, output_dir)
 
-        hls_path = f"{output_dir}/index.m3u8"
+        hls_path = f"{output_dir}/master.m3u8"
 
      # Save in DB
     media = Media(
