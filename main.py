@@ -94,6 +94,7 @@ from database import engine
 from models.user import User
 from services.auth_service import get_password_hash
 from core.config import settings
+import os
 
 from api import auth, users, media, categories, dashboard, general_api, media_interactions, comment_interactions
 
@@ -138,6 +139,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+os.makedirs("static", exist_ok=True)
 
 # Static files
 app.mount("/static", StaticFiles(directory="static"), name="static")

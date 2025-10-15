@@ -26,17 +26,31 @@ class Media(SQLModel, table=True):
     category_id: Optional[int] = Field(default=None, foreign_key="category.id")
     owner_id: int = Field(foreign_key="users.id")
 
+    views: int = Field(default=0)
+    hls_path: Optional[str] = None
+    width: Optional[int] = None
+    height: Optional[int] = None
+    duration: Optional[int] = None
+
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
     # Relationships
     category: Optional["Category"] = Relationship(back_populates="media")
     user: Optional["User"] = Relationship(back_populates="media")
 
-    comments: List["Comment"] = Relationship(back_populates="media")
-    reactions: List["MediaReaction"] = Relationship(back_populates="media")
-
-    views: int = Field(default=0)
-
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    comments: List["Comment"] = Relationship(
+            back_populates="media", 
+            sa_relationship_kwargs={
+                "cascade": "all, delete-orphan",
+            }
+        )
+    reactions: List["MediaReaction"] = Relationship(
+            back_populates="media",
+            sa_relationship_kwargs={
+                "cascade": "all, delete-orphan",
+            }
+        )
 
 class MediaCreate(SQLModel):
     title: str
@@ -57,6 +71,10 @@ class MediaRead(SQLModel):
     created_at: datetime
     status: MediaStatus
     views: int
+    hls_path: Optional[str]
+    width: Optional[int]
+    height: Optional[int]
+    duration: int
 
     class Config:
         from_attributes = True

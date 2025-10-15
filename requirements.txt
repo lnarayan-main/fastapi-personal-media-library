@@ -11,3 +11,5 @@ pydantic-settings==2.1.0
 alembic
 fastapi-mail==1.4.1
 pydantic-core==2.14.1
+
+ffmpeg-python

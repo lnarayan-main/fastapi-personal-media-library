@@ -15,9 +15,19 @@ class Comment(SQLModel, table=True):
     media: Optional["Media"] = Relationship(back_populates="comments")
     user: Optional["User"] = Relationship(back_populates="comments")
 
-    replies: List["CommentReply"] = Relationship(back_populates="comment")
+    replies: List["CommentReply"] = Relationship(
+            back_populates="comment",
+            sa_relationship_kwargs={
+                "cascade": "all, delete-orphan",
+            }    
+        )
 
-    reactions: List["CommentReaction"] = Relationship(back_populates="comment")
+    reactions: List["CommentReaction"] = Relationship(
+            back_populates="comment",
+            sa_relationship_kwargs={
+                "cascade": "all, delete-orphan",
+            }
+        )
 
 
 

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Query
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Query, BackgroundTasks
 from typing import List, Optional
 import os
 from uuid import uuid4
@@ -20,13 +20,165 @@ from schemas.media_response import MediaResponse, CommentResponse, MediaReaction
 from schemas.user import UserRead
 from schemas.comment_interaction import CommentReactionsData
 from models.comment_interaction import CommentReaction
+import subprocess
+from pathlib import Path
+import json
+import ffmpeg
 
 router = APIRouter()
 
 UPLOAD_DIR=settings.UPLOAD_MEDIA_DIR
 
+# @router.post("/media/create", response_model=Media)
+# async def create_media(
+#     title: str = Form(...),
+#     description: str | None = Form(None),
+#     media_type: str = Form(...),  # image, video, audio
+#     category_id: Optional[int] = Form(None),
+#     file: UploadFile = File(...),
+#     thumbnail: Optional[UploadFile] = File(None),
+#     session: Session = Depends(get_session),
+#     current_user: User = Depends(get_current_user),
+# ):
+#     # Ensure upload dir exists
+#     os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+#     # Save media file
+#     file_ext = os.path.splitext(file.filename)[1]
+#     unique_name = f"{current_user.id}_{uuid4().hex}{file_ext}"
+#     file_path = os.path.join(UPLOAD_DIR, unique_name)
+
+#     with open(file_path, "wb") as buffer:
+#         shutil.copyfileobj(file.file, buffer)
+
+#     file_url = file_path
+
+#     # Handle thumbnail if provided
+#     thumbnail_url = None
+#     if thumbnail:
+#         thumb_ext = os.path.splitext(thumbnail.filename)[1]
+#         thumb_name = f"{current_user.id}_thumb_{uuid4().hex}{thumb_ext}"
+#         thumb_path = os.path.join(UPLOAD_DIR, thumb_name)
+
+#         with open(thumb_path, "wb") as f:
+#             f.write(await thumbnail.read())
+
+#         thumbnail_url = thumb_path
+
+#     # Save in DB
+#     media = Media(
+#         title=title,
+#         description=description,
+#         media_type=media_type,
+#         file_url=file_url,
+#         thumbnail_url=thumbnail_url,
+#         owner_id=current_user.id,
+#         category_id=category_id,
+#         created_at=datetime.utcnow(),
+#     )
+#     session.add(media)
+#     session.commit()
+#     session.refresh(media)
+
+#     return media
+
+
+
+def convert_to_hls(video_path: Path, output_dir: Path):
+    """
+    Convert uploaded video to HLS format (.m3u8 + .ts)
+    """
+    try:
+        os.makedirs(output_dir, exist_ok=True)
+        cmd = [
+            "ffmpeg",
+            "-i", str(video_path),
+            "-profile:v", "baseline",
+            "-level", "3.0",
+            "-start_number", "0",
+            "-hls_time", "10",
+            "-hls_list_size", "0",
+            "-f", "hls",
+            str(output_dir / "index.m3u8"),
+        ]
+        subprocess.run(cmd, check=True)
+        print(f"✅ HLS conversion complete for {video_path}")
+    except subprocess.CalledProcessError as e:
+        print(f"❌ FFmpeg failed: {e}")
+
+
+def get_video_metadata(video_path: Path):
+    """Extract width, height, and duration using ffprobe."""
+    cmd = [
+        "ffprobe", "-v", "error",
+        "-select_streams", "v:0",
+        "-show_entries", "stream=width,height,duration",
+        "-of", "json",
+        str(video_path)
+    ]
+    result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    if result.returncode != 0:
+        print("FFprobe error:", result.stderr)
+        return None
+    data = json.loads(result.stdout)
+    if "streams" in data and len(data["streams"]) > 0:
+        width = data["streams"][0].get("width")
+        height = data["streams"][0].get("height")
+        duration = float(data["streams"][0].get("duration", 0))
+        return width, height, duration
+    return None, None, 0
+
+
+def generate_thumbnail(video_path: Path, output_dir: Path, duration: float):
+    """Generate a thumbnail from the middle of the video."""
+    thumbnail_path = output_dir / f"{video_path.stem}_thumb.jpg"
+    os.makedirs(output_dir, exist_ok=True)
+    # Capture frame at half duration (middle)
+    capture_time = max(duration / 2, 1)
+    cmd = [
+        "ffmpeg", "-y",
+        "-ss", str(capture_time),
+        "-i", str(video_path),
+        "-frames:v", "1",
+        "-q:v", "2",
+        str(thumbnail_path)
+    ]
+    subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    return thumbnail_path
+
+
+def get_audio_metadata(file_path: str):
+    """Extract metadata from audio file using ffmpeg.probe."""
+    probe = ffmpeg.probe(file_path)
+    audio_stream = next((stream for stream in probe["streams"] if stream["codec_type"] == "audio"), None)
+    
+    if not audio_stream:
+        raise ValueError("No audio stream found in the file.")
+    
+    duration = float(probe["format"]["duration"])
+    sample_rate = int(audio_stream.get("sample_rate", 0))
+    channels = int(audio_stream.get("channels", 0))
+    bit_rate = int(probe["format"].get("bit_rate", 0))
+
+    return {
+        "duration": duration,
+        "sample_rate": sample_rate,
+        "channels": channels,
+        "bit_rate": bit_rate,
+    }
+
+MEDIA_UPLOAD_DIR = Path("static/media/uploads")
+HLS_OUTPUT_DIR = Path("static/media/hls")
+THUMBNAIL_DIR = Path("static/media/thumbnails")
+
+MEDIA_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+HLS_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+THUMBNAIL_DIR.mkdir(parents=True, exist_ok=True)
+
+
 @router.post("/media/create", response_model=Media)
 async def create_media(
+    background_tasks: BackgroundTasks,
     title: str = Form(...),
     description: str | None = Form(None),
     media_type: str = Form(...),  # image, video, audio
@@ -36,38 +188,66 @@ async def create_media(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
-    # Ensure upload dir exists
-    os.makedirs(UPLOAD_DIR, exist_ok=True)
-
-    # Save media file
-    file_ext = os.path.splitext(file.filename)[1]
-    unique_name = f"{current_user.id}_{uuid4().hex}{file_ext}"
-    file_path = os.path.join(UPLOAD_DIR, unique_name)
-
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-
-    file_url = file_path
-
-    # Handle thumbnail if provided
+    hls_path = ''
     thumbnail_url = None
-    if thumbnail:
-        thumb_ext = os.path.splitext(thumbnail.filename)[1]
-        thumb_name = f"{current_user.id}_thumb_{uuid4().hex}{thumb_ext}"
-        thumb_path = os.path.join(UPLOAD_DIR, thumb_name)
+    width = None
+    height = None
+    duration = None
+    if media_type == 'audio':
+        file_ext = os.path.splitext(file.filename)[1]
+        unique_name = f"{current_user.id}_{uuid4().hex}{file_ext}"
+        file_path = os.path.join(MEDIA_UPLOAD_DIR, unique_name)
 
-        with open(thumb_path, "wb") as f:
-            f.write(await thumbnail.read())
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
 
-        thumbnail_url = thumb_path
+        file_url = file_path
 
-    # Save in DB
+        if thumbnail:
+            thumb_ext = os.path.splitext(thumbnail.filename)[1]
+            thumb_name = f"{current_user.id}_thumb_{uuid4().hex}{thumb_ext}"
+            thumb_path = os.path.join(THUMBNAIL_DIR, thumb_name)
+
+            with open(thumb_path, "wb") as f:
+                f.write(await thumbnail.read())
+
+            thumbnail_url = thumb_path
+
+        duration = get_audio_metadata(file_url)['duration']
+
+    elif media_type == 'video':
+        if not file.filename.endswith((".mp4", ".mov", ".mkv")):
+            raise HTTPException(status_code=400, detail="Unsupported video format")
+        
+        unique_name = f"{current_user.id}_{uuid4().hex}"
+
+        file_url = MEDIA_UPLOAD_DIR / unique_name
+        with open(file_url, "wb") as f:
+            f.write(await file.read())
+
+        width, height, duration = get_video_metadata(file_url)
+
+        # Generate thumbnail
+        thumbnail_url = generate_thumbnail(file_url, THUMBNAIL_DIR, duration)
+
+        # Prepare output directory for HLS
+        output_dir = HLS_OUTPUT_DIR / unique_name
+        # Run conversion in background
+        background_tasks.add_task(convert_to_hls, file_url, output_dir)
+
+        hls_path = f"{output_dir}/index.m3u8"
+
+     # Save in DB
     media = Media(
         title=title,
         description=description,
         media_type=media_type,
-        file_url=file_url,
-        thumbnail_url=thumbnail_url,
+        file_url=str(file_url),
+        hls_path=hls_path,
+        thumbnail_url=str(thumbnail_url),
+        width=width,
+        height=height,
+        duration=duration,
         owner_id=current_user.id,
         category_id=category_id,
         created_at=datetime.utcnow(),
@@ -76,7 +256,7 @@ async def create_media(
     session.commit()
     session.refresh(media)
 
-    return media
+    return {"message": "Video uploaded successfully!", "media": media}
 
 
 @router.get("/media/list", response_model=List[MediaRead])
@@ -294,9 +474,26 @@ def delete_media(
     if media.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized to delete this media")
 
-    # Delete associated files (if exist)
     if media.file_url and os.path.exists(media.file_url):
         os.remove(media.file_url)
+
+    if media.file_url:
+        file_path = Path(media.file_url)
+        if file_path.exists() and file_path.is_file():
+            try:
+                file_path.unlink()
+                print(f"✅ Deleted original file: {file_path}")
+            except Exception as e:
+                print(f"⚠️ Error deleting file {file_path}: {e}")
+
+    if media.hls_path:
+        hls_path = Path(media.hls_path).parent  # remove the folder (not just index.m3u8)
+        if hls_path.exists() and hls_path.is_dir():
+            try:
+                shutil.rmtree(hls_path)
+                print(f"✅ Deleted HLS directory: {hls_path}")
+            except Exception as e:
+                print(f"⚠️ Error deleting HLS directory {hls_path}: {e}")
 
     if media.thumbnail_url and os.path.exists(media.thumbnail_url):
         os.remove(media.thumbnail_url)

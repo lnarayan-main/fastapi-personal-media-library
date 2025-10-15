@@ -26,6 +26,10 @@ class MediaRead(BaseModel):
     status: MediaStatus
     user: Optional[UserRead] = None
     views: int
+    hls_path: Optional[str]
+    width: Optional[int]
+    height: Optional[int]
+    duration: int
 
     class Config:
         from_attributes = True 
