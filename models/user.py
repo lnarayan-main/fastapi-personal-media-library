@@ -23,6 +23,7 @@ class UserBase(SQLModel):
     status: UserStatus = Field(default=UserStatus.ACTIVE, sa_column_kwargs={"default": UserStatus.ACTIVE})
     role: UserRole = Field(default=UserRole.USER)
     profile_pic_url: Optional[str] = None
+    background_pic_url: Optional[str] = None
     about: Optional[str] = None
 
     class Config:
@@ -48,6 +49,18 @@ class User(UserBase, table=True):
     media_reactions: List["MediaReaction"] = Relationship(back_populates="user")
     comment_replies: List["CommentReply"] = Relationship(back_populates="user")
     comment_reactions: List["CommentReaction"] = Relationship(back_populates="user")
+
+    subscribers: list["Subscription"] = Relationship(
+        back_populates="creator",
+        # Use primaryjoin to clarify the link on the Subscription table's creator_id column
+        sa_relationship_kwargs={"primaryjoin": "User.id == Subscription.creator_id"}
+    )
+
+    subscriptions: list["Subscription"] = Relationship(
+        back_populates="subscriber",
+        # Use primaryjoin to clarify the link on the Subscription table's subscriber_id column
+        sa_relationship_kwargs={"primaryjoin": "User.id == Subscription.subscriber_id"}
+    )
 
 class UserRead(UserBase):
     id: int
