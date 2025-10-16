@@ -24,6 +24,7 @@ import subprocess
 from pathlib import Path
 import json
 import ffmpeg
+import logging
 
 router = APIRouter()
 
@@ -83,7 +84,7 @@ UPLOAD_DIR=settings.UPLOAD_MEDIA_DIR
 #     return media
 
 
-
+# simple conversion
 def convert_to_hls(video_path: Path, output_dir: Path):
     """
     Convert uploaded video to HLS format (.m3u8 + .ts)
@@ -105,6 +106,102 @@ def convert_to_hls(video_path: Path, output_dir: Path):
         print(f"✅ HLS conversion complete for {video_path}")
     except subprocess.CalledProcessError as e:
         print(f"❌ FFmpeg failed: {e}")
+
+
+
+logger = logging.getLogger(__name__)
+
+# multi quality conversion
+def convert_video_to_hls(video_path: Path, output_dir: Path) -> Path:
+    """
+    Convert a video into multiple quality HLS streams with proper error handling.
+    Creates 480p, 720p, 1080p variant playlists and a master.m3u8 file.
+    
+    Fix applied: Changed the complex scale filter logic to use '-2' for 
+    automatically calculating the width to ensure it is divisible by 2.
+    """
+
+    try:
+        os.makedirs(output_dir, exist_ok=True)
+
+        cmd = [
+            "ffmpeg", "-y", "-i", str(video_path),
+           
+            # --- Stream Filters ---
+            # Use the simple and robust '-2' to ensure the calculated dimension (width) 
+            # is automatically divisible by 2 while maintaining aspect ratio.
+            "-filter_complex",
+            "[v:0]split=3[v1][v2][v3];"
+            "[v1]scale=-2:480[v1out];"   # Scale to height 480, calculate even width
+            "[v2]scale=-2:720[v2out];"   # Scale to height 720, calculate even width
+            "[v3]scale=-2:1080[v3out]",  # Scale to height 1080, calculate even width
+
+            # --- 480p Output ---
+            # Maps video stream [v1out] and the audio stream (a:0?)
+            "-map", "[v1out]", "-c:v:0", "libx264", "-b:v:0", "800k", "-maxrate", "1000k", "-bufsize", "1200k",
+            "-map", "a:0?", "-c:a:0", "aac", "-b:a:0", "96k",
+            # HLS settings
+            "-f", "hls", "-hls_time", "10", "-hls_list_size", "0",
+            "-hls_segment_filename", str(output_dir / "480p_%03d.ts"),
+            str(output_dir / "480p.m3u8"),
+
+            # --- 720p Output ---
+            "-map", "[v2out]", "-c:v:1", "libx264", "-b:v:1", "2500k", "-maxrate", "3000k", "-bufsize", "3750k",
+            "-map", "a:0?", "-c:a:1", "aac", "-b:a:1", "128k",
+            # HLS settings
+            "-f", "hls", "-hls_time", "10", "-hls_list_size", "0",
+            "-hls_segment_filename", str(output_dir / "720p_%03d.ts"),
+            str(output_dir / "720p.m3u8"),
+
+            # --- 1080p Output ---
+            "-map", "[v3out]", "-c:v:2", "libx264", "-b:v:2", "5000k", "-maxrate", "6000k", "-bufsize", "7500k",
+            "-map", "a:0?", "-c:a:2", "aac", "-b:a:2", "192k",
+            # HLS settings
+            "-f", "hls", "-hls_time", "10", "-hls_list_size", "0",
+            "-hls_segment_filename", str(output_dir / "1080p_%03d.ts"),
+            str(output_dir / "1080p.m3u8"),
+        ]
+        
+        # NOTE: Added c:v:n 'libx264', maxrate, and bufsize for better streaming quality.
+
+        # Run FFmpeg safely
+        result = subprocess.run(
+            cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+        )
+
+        logger.info(f"FFmpeg stdout: {result.stdout}")
+        logger.error(f"FFmpeg stderr: {result.stderr}")
+
+        if result.returncode != 0:
+            logger.error(f"FFmpeg failed: {result.stderr}")
+            # Clean up partial outputs
+            shutil.rmtree(output_dir, ignore_errors=True)
+            raise RuntimeError("HLS conversion failed. See logs for details.")
+
+        # Verify all expected variant playlists exist
+        for res in ["480p", "720p", "1080p"]:
+            if not (output_dir / f"{res}.m3u8").exists():
+                raise FileNotFoundError(f"Missing {res}.m3u8 variant playlist")
+
+        # Write master playlist (using common 16:9 resolutions for demonstration)
+        master_playlist = output_dir / "master.m3u8"
+        with open(master_playlist, "w") as f:
+            f.write("#EXTM3U\n")
+            f.write('#EXT-X-VERSION:3\n')
+            # Use fixed resolution for HLS master playlist for simplicity, 
+            # though FFmpeg calculates the actual width based on the input aspect ratio.
+            f.write('#EXT-X-STREAM-INF:BANDWIDTH=1200000,RESOLUTION=854x480\n480p.m3u8\n') # Updated BANDWIDTH/BITRATE
+            f.write('#EXT-X-STREAM-INF:BANDWIDTH=3750000,RESOLUTION=1280x720\n720p.m3u8\n')
+            f.write('#EXT-X-STREAM-INF:BANDWIDTH=7500000,RESOLUTION=1920x1080\n1080p.m3u8\n')
+
+        return master_playlist
+
+    except Exception as e:
+        logger.exception(f"Error converting {video_path} to HLS: {e}")
+        shutil.rmtree(output_dir, ignore_errors=True)
+        # Re-raise the exception to propagate the failure
+        raise
+
 
 
 def get_video_metadata(video_path: Path):
@@ -200,7 +297,7 @@ async def create_media(
     background_tasks: BackgroundTasks,
     title: str = Form(...),
     description: str | None = Form(None),
-    media_type: str = Form(...),  # image, video, audio
+    media_type: str = Form(...),  # video, audio
     category_id: Optional[int] = Form(None),
     file: UploadFile = File(...),
     thumbnail: Optional[UploadFile] = File(None),
@@ -259,7 +356,7 @@ async def create_media(
         # Prepare output directory for HLS
         output_dir = HLS_OUTPUT_DIR / unique_folder_name
         # Run conversion in background
-        background_tasks.add_task(convert_to_hls, file_url, output_dir)
+        background_tasks.add_task(convert_video_to_hls, file_url, output_dir)
 
         hls_path = f"{output_dir}/master.m3u8"
 
@@ -500,8 +597,8 @@ def delete_media(
     if media.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized to delete this media")
 
-    if media.file_url and os.path.exists(media.file_url):
-        os.remove(media.file_url)
+    # if media.file_url and os.path.exists(media.file_url):
+    #     os.remove(media.file_url)
 
     if media.file_url:
         file_path = Path(media.file_url)
