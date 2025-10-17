@@ -10,7 +10,7 @@ from sqlmodel import Session, select, func
 from database import get_session
 from services.auth_service import get_current_user
 from services.file_service import save_upload_file, save_upload_file_async
-from models.media import Media, MediaStatusUpdate
+from models.media import Media, MediaStatusUpdate, MediaStatus
 from models.user import User, UserRole
 from models.media_interaction import Comment, MediaReaction
 from schemas.media import PaginatedMedia, MediaRead, MediaWithRelatedCategoryMedia
@@ -400,7 +400,7 @@ def list_media_all(
     limit: int = 50,
     session: Session = Depends(get_session),
 ):
-    query = select(Media).offset(skip).limit(limit)
+    query = select(Media).where(Media.status == MediaStatus.ACTIVE).offset(skip).limit(limit)
     media_list = session.exec(query).all()
     return media_list
 
