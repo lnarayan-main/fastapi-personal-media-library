@@ -1,15 +1,18 @@
-from fastapi import APIRouter, status, HTTPException, Depends, BackgroundTasks
+from fastapi import APIRouter, status, HTTPException, Depends, BackgroundTasks, UploadFile, File
 from schemas.contact_us import ContactUsMessage
 from schemas.user import UserRead
 from schemas.media import MediaRead
 from models.media import Media
 from models.user import User
+from services.auth_service import get_current_user
+from services.file_service import safe_filename, save_upload_file
 
 from core.mail import fast_mail
 from fastapi_mail import MessageSchema, MessageType, MultipartSubtypeEnum
 from core.config import settings
 from database import get_session
 from sqlmodel import Session, select
+import os
 
 router = APIRouter()
 
@@ -70,3 +73,38 @@ def get_user_media(user_id: int, session: Session = Depends(get_session)):
         raise HTTPException(status_code=404, detail="Media not found.")
 
     return media
+
+@router.post("/user/{user_id}/bg-profile-update")
+def bg_profile_update(
+        user_id: int, 
+        bg_file: UploadFile = File(...), 
+        session: Session = Depends(get_session),
+        current_user: User = Depends(get_current_user)
+    ):
+    if not bg_file:
+        raise HTTPException(status_code=400, detail="No file provided")
+    
+    if user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="User not found.")
+    if bg_file:
+        upload_dir = settings.UPLOAD_PROFILE_DIR
+        os.makedirs(upload_dir, exist_ok=True)
+
+        if current_user.background_pic_url:
+            old_file_path = current_user.background_pic_url.lstrip("/")
+            if os.path.exists(old_file_path):
+                os.remove(old_file_path)
+
+        filename = safe_filename(current_user.id, bg_file.filename)
+        file_path = os.path.join(upload_dir, filename)
+
+        # Save file
+        save_upload_file(bg_file, upload_dir, filename)
+
+        current_user.background_pic_url = f"/{upload_dir}/{filename}"
+
+    session.add(current_user)
+    session.commit()
+    session.refresh(current_user)
+
+    return {'message': "Background Pic saved successfully.", "bg_pic_url": current_user.background_pic_url}
