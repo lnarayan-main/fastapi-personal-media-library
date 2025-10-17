@@ -1,3 +1,20 @@
+# fastapi
+# uvicorn[standard]
+# sqlmodel
+# psycopg2-binary
+# python-dotenv
+# pyjwt
+# pwdlib[argon2]
+# python-multipart
+# pydantic[email]==2.5.0
+# pydantic-settings==2.1.0
+# alembic
+# fastapi-mail==1.4.1
+# pydantic-core==2.14.1
+
+# ffmpeg-python
+
+
 fastapi
 uvicorn[standard]
 sqlmodel

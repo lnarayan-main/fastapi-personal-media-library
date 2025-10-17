@@ -3,7 +3,7 @@ from typing import Optional, List
 from datetime import datetime
 from models.user import UserRole, UserStatus
 from sqlmodel import SQLModel, Field
-from models.subscription import Subscription
+from schemas.subscription import ReadSubscription
 
 class UserCreate(BaseModel):
     name: str
@@ -21,7 +21,7 @@ class UserRead(BaseModel):
     profile_pic_url: Optional[str] = None
     background_pic_url: Optional[str] = None
     created_at: datetime
-    subscribers: Optional[List[Subscription]] = None
+    subscribers: Optional[List[ReadSubscription]] = None
     
     class Config:
         # ⭐️ ADD THIS LINE ⭐️

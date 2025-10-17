@@ -62,14 +62,6 @@ class User(UserBase, table=True):
         sa_relationship_kwargs={"primaryjoin": "User.id == Subscription.subscriber_id"}
     )
 
-class UserRead(UserBase):
-    id: int
-    role: UserRole
-    created_at : datetime
-
-    class Config:
-        from_attributes = True
-
 class UserUpdate(SQLModel):
     name: Optional[str] = None
     email: Optional[str] = None

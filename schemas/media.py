@@ -29,7 +29,7 @@ class MediaRead(BaseModel):
     hls_path: Optional[str]
     width: Optional[int]
     height: Optional[int]
-    duration: int
+    duration: Optional[int] = None
 
     class Config:
         from_attributes = True 
