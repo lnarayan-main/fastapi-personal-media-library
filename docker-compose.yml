@@ -1,44 +1,3 @@
-# version: '3.8' 
-
-# services:
-#   db:
-#     image: postgres:16-alpine
-#     container_name: postgres_db_media
-#     # restart: always
-#     environment:
-#       # Use variables from .env file
-#       POSTGRES_USER: ${POSTGRES_USER}
-#       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-#       POSTGRES_DB: ${POSTGRES_DB}
-#     ports:
-#       - "5434:5432"
-#     volumes:
-#       - postgres_data:/var/lib/postgresql/data/
-
-#   web:
-#     build: .
-#     command: uvicorn main:app --host 0.0.0.0 --reload
-#     volumes:
-#       - .:/app
-#     ports:
-#       - "8000:8000"
-#     depends_on:
-#       - db
-#     environment:
-#       # Use the variable from .env file
-#       DATABASE_URL: ${DATABASE_URL}
-#       SECRET_KEY: ${SECRET_KEY}
-#       ALGORITHM: ${ALGORITHM}
-#       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES}
-#       UPLOAD_DIR: ${UPLOAD_DIR}
-
-# volumes:
-#   postgres_data:
-
-
-
-##########################################################33333
-
 version: "3.9"
 services:
   db:
@@ -66,9 +25,9 @@ services:
     depends_on:
       - db
     volumes:
-      - .:/app                    # Mount your code for live reload
-      - /app/__pycache__          # Exclude Python cache
-      - /app/.pytest_cache        # Exclude pytest cache (if any)
+      - .:/app                   
+      - /app/__pycache__          
+      - /app/.pytest_cache        
 
 volumes:
   postgres_data:
