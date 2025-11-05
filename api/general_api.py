@@ -13,6 +13,7 @@ from core.config import settings
 from database import get_session
 from sqlmodel import Session, select
 import os
+from core.cloudinary_config import cloudinary
 
 router = APIRouter()
 
@@ -75,7 +76,7 @@ def get_user_media(user_id: int, session: Session = Depends(get_session)):
     return media
 
 @router.post("/user/{user_id}/bg-profile-update")
-def bg_profile_update(
+async def bg_profile_update(
         user_id: int, 
         bg_file: UploadFile = File(...), 
         session: Session = Depends(get_session),
@@ -86,22 +87,45 @@ def bg_profile_update(
     
     if user_id != current_user.id:
         raise HTTPException(status_code=404, detail="User not found.")
+    # if bg_file:
+    #     upload_dir = settings.UPLOAD_PROFILE_DIR
+    #     os.makedirs(upload_dir, exist_ok=True)
+
+    #     if current_user.background_pic_url:
+    #         old_file_path = current_user.background_pic_url.lstrip("/")
+    #         if os.path.exists(old_file_path):
+    #             os.remove(old_file_path)
+
+    #     filename = safe_filename(current_user.id, bg_file.filename)
+    #     file_path = os.path.join(upload_dir, filename)
+
+    #     # Save file
+    #     save_upload_file(bg_file, upload_dir, filename)
+
+    #     current_user.background_pic_url = f"/{upload_dir}/{filename}"
+
+
+    # image uploading to cloudinary
     if bg_file:
-        upload_dir = settings.UPLOAD_PROFILE_DIR
-        os.makedirs(upload_dir, exist_ok=True)
+        try:
+            if current_user.background_pic_public_id:
+                try:
+                    cloudinary.uploader.destroy(current_user.background_pic_public_id)
+                except Exception as delete_error:
+                    print(f"⚠️ Failed to delete old background pic: {delete_error}")
 
-        if current_user.background_pic_url:
-            old_file_path = current_user.background_pic_url.lstrip("/")
-            if os.path.exists(old_file_path):
-                os.remove(old_file_path)
+            res = cloudinary.uploader.upload(
+                bg_file.file,
+                folder=f"mediahub/profile_pics/{current_user.id}",
+                transformation=[{"width": 600, "height": 600, "crop": "limit"}],  
+                overwrite=True
+            )
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
 
-        filename = safe_filename(current_user.id, bg_file.filename)
-        file_path = os.path.join(upload_dir, filename)
 
-        # Save file
-        save_upload_file(bg_file, upload_dir, filename)
-
-        current_user.background_pic_url = f"/{upload_dir}/{filename}"
+        current_user.background_pic_url = res.get("secure_url")
+        current_user.background_pic_public_id = res.get("public_id")
 
     session.add(current_user)
     session.commit()

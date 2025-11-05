@@ -32,6 +32,8 @@ class Media(SQLModel, table=True):
     height: Optional[int] = None
     duration: Optional[int] = None
 
+    public_id: str
+
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 

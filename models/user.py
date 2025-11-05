@@ -26,6 +26,9 @@ class UserBase(SQLModel):
     background_pic_url: Optional[str] = None
     about: Optional[str] = None
 
+    profile_pic_public_id: Optional[str] = None
+    background_pic_public_id: Optional[str] = None
+
     class Config:
         from_attributes = True
 

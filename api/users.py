@@ -10,6 +10,7 @@ from services.file_service import safe_filename, save_upload_file, save_upload_f
 from typing import List
 from schemas.user import PaginatedUsers, UserRole, UserRead
 from core.config import settings
+from core.cloudinary_config import cloudinary
 
 router = APIRouter()
 
@@ -48,24 +49,47 @@ def update_profile(
         current_user.hashed_password = get_password_hash(password)
 
     # Handle file upload
+    # if profile_pic:
+    #     upload_dir = settings.UPLOAD_PROFILE_DIR
+    #     os.makedirs(upload_dir, exist_ok=True)
+
+    #     # Delete old profile pic
+    #     if current_user.profile_pic_url:
+    #         old_file_path = current_user.profile_pic_url.lstrip("/")
+    #         if os.path.exists(old_file_path):
+    #             os.remove(old_file_path)
+
+    #     # Safe and unique filename
+    #     filename = safe_filename(current_user.id, profile_pic.filename)
+    #     file_path = os.path.join(upload_dir, filename)
+
+    #     # Save file
+    #     save_upload_file(profile_pic, upload_dir, filename)
+
+    #     current_user.profile_pic_url = f"/{upload_dir}/{filename}"
+
+
+    # image uploading to cloudinary
     if profile_pic:
-        upload_dir = settings.UPLOAD_PROFILE_DIR
-        os.makedirs(upload_dir, exist_ok=True)
+        try:
+            if current_user.profile_pic_public_id:
+                try:
+                    cloudinary.uploader.destroy(current_user.profile_pic_public_id)
+                except Exception as delete_error:
+                    print(f"⚠️ Failed to delete old profile pic: {delete_error}")
 
-        # Delete old profile pic
-        if current_user.profile_pic_url:
-            old_file_path = current_user.profile_pic_url.lstrip("/")
-            if os.path.exists(old_file_path):
-                os.remove(old_file_path)
+            res = cloudinary.uploader.upload(
+                profile_pic.file,
+                folder=f"mediahub/profile_pics/{current_user.id}",
+                transformation=[{"width": 600, "height": 600, "crop": "limit"}],  
+                overwrite=True
+            )
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
 
-        # Safe and unique filename
-        filename = safe_filename(current_user.id, profile_pic.filename)
-        file_path = os.path.join(upload_dir, filename)
 
-        # Save file
-        save_upload_file(profile_pic, upload_dir, filename)
-
-        current_user.profile_pic_url = f"/{upload_dir}/{filename}"
+        current_user.profile_pic_url = res.get("secure_url")
+        current_user.profile_pic_public_id = res.get("public_id")
 
     session.add(current_user)
     session.commit()
