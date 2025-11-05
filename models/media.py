@@ -33,6 +33,7 @@ class Media(SQLModel, table=True):
     duration: Optional[int] = None
 
     public_id: str
+    thumbnail_public_id: str
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)

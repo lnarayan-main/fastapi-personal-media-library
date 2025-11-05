@@ -25,6 +25,8 @@ from pathlib import Path
 import json
 import ffmpeg
 import logging
+from core.cloudinary_config import cloudinary
+from cloudinary.utils import cloudinary_url
 
 router = APIRouter()
 
@@ -292,94 +294,362 @@ HLS_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 THUMBNAIL_DIR.mkdir(parents=True, exist_ok=True)
 
 
+# @router.post("/media/create", response_model=Media)
+# async def create_media(
+#     background_tasks: BackgroundTasks,
+#     title: str = Form(...),
+#     description: str | None = Form(None),
+#     media_type: str = Form(...),  # video, audio
+#     category_id: Optional[int] = Form(None),
+#     file: UploadFile = File(...),
+#     thumbnail: Optional[UploadFile] = File(None),
+#     session: Session = Depends(get_session),
+#     current_user: User = Depends(get_current_user),
+# ):
+#     hls_path = ''
+#     thumbnail_url = None
+#     width = None
+#     height = None
+#     duration = None
+#     if media_type == 'audio':
+#         file_ext = os.path.splitext(file.filename)[1]
+#         unique_folder_name = f"{current_user.id}_{uuid4().hex}"
+#         unique_name = f"{unique_folder_name}{file_ext}"
+#         file_path = os.path.join(MEDIA_UPLOAD_DIR, unique_name)
+
+#         with open(file_path, "wb") as buffer:
+#             shutil.copyfileobj(file.file, buffer)
+
+#         file_url = file_path
+
+#         output_dir = HLS_OUTPUT_DIR / unique_folder_name
+#         background_tasks.add_task(convert_audio_to_hls, file_url, output_dir)
+#         hls_path = f"{output_dir}/master.m3u8"
+
+#         if thumbnail:
+#             thumb_ext = os.path.splitext(thumbnail.filename)[1]
+#             thumb_name = f"{current_user.id}_thumb_{uuid4().hex}{thumb_ext}"
+#             thumb_path = os.path.join(THUMBNAIL_DIR, thumb_name)
+
+#             with open(thumb_path, "wb") as f:
+#                 f.write(await thumbnail.read())
+
+#             thumbnail_url = thumb_path
+
+#         duration = get_audio_metadata(file_url)['duration']
+
+#     elif media_type == 'video':
+#         if not file.filename.endswith((".mp4", ".mov", ".mkv")):
+#             raise HTTPException(status_code=400, detail="Unsupported video format")
+        
+#         file_ext = os.path.splitext(file.filename)[1]
+#         unique_folder_name = f"{current_user.id}_{uuid4().hex}"
+#         unique_name = f"{unique_folder_name}{file_ext}"
+
+#         file_url = MEDIA_UPLOAD_DIR / unique_name
+#         with open(file_url, "wb") as f:
+#             f.write(await file.read())
+
+#         width, height, duration = get_video_metadata(file_url)
+
+#         # Generate thumbnail
+#         thumbnail_url = generate_thumbnail(file_url, THUMBNAIL_DIR, duration)
+
+#         # Prepare output directory for HLS
+#         output_dir = HLS_OUTPUT_DIR / unique_folder_name
+#         # Run conversion in background
+#         background_tasks.add_task(convert_video_to_hls, file_url, output_dir)
+
+#         hls_path = f"{output_dir}/master.m3u8"
+
+#      # Save in DB
+#     media = Media(
+#         title=title,
+#         description=description,
+#         media_type=media_type,
+#         file_url=str(file_url),
+#         hls_path=hls_path,
+#         thumbnail_url=str(thumbnail_url),
+#         width=width,
+#         height=height,
+#         duration=duration,
+#         owner_id=current_user.id,
+#         category_id=category_id,
+#         created_at=datetime.utcnow(),
+#     )
+#     session.add(media)
+#     session.commit()
+#     session.refresh(media)
+
+#     return {"message": "Video uploaded successfully!", "media": media}
+
+
 @router.post("/media/create", response_model=Media)
 async def create_media(
     background_tasks: BackgroundTasks,
     title: str = Form(...),
     description: str | None = Form(None),
-    media_type: str = Form(...),  # video, audio
-    category_id: Optional[int] = Form(None),
+    media_type: str = Form(...),  # 'video' or 'audio'
+    category_id: int | None = Form(None),
     file: UploadFile = File(...),
+    thumbnail: UploadFile | None = File(None),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    mime = file.content_type or ""
+    resource_type = "video" if mime.startswith(("video/", "audio/")) else "image"
+
+    folder_type = "videos" if media_type == "video" else "audios"
+
+    try:
+        res = cloudinary.uploader.upload(
+            file.file,
+            resource_type="video",  # Cloudinary uses 'video' for both video/audio
+            folder=f"mediahub/{folder_type}/{current_user.id}",
+            use_filename=True,
+            unique_filename=True,
+        )
+
+        public_id = res.get("public_id")
+        secure_url = res.get("secure_url")
+        cloud_name = cloudinary.config().cloud_name
+
+        # --- Generate HLS URL (Cloudinary auto-generates m3u8 for video/audio) ---
+        hls_url = f"https://res.cloudinary.com/{cloud_name}/video/upload/{public_id}.m3u8"
+
+        thumb_public_id = None
+
+        if media_type == "video":
+            thumb_url, _ = cloudinary_url(
+                public_id,
+                resource_type="video",
+                format="jpg",
+                transformation=[{"width": 400, "height": 225, "crop": "fill"}],
+            )
+        elif media_type == "audio":
+            if thumbnail:
+                thumb_res = cloudinary.uploader.upload(
+                    thumbnail.file,
+                    folder=f"mediahub/audio_thumbnails/{current_user.id}",
+                    use_filename=True,
+                    unique_filename=True,
+                    resource_type="image",
+                )
+                thumb_url = thumb_res.get("secure_url")
+                thumb_public_id = thumb_res.get('public_id')
+            else:
+                thumb_url = None
+        else:
+            thumb_url = None
+
+        duration = res.get("duration")
+        width = res.get("width")
+        height = res.get("height")
+
+        media = Media(
+            title=title,
+            description=description,
+            media_type=media_type, 
+            file_url=secure_url,
+            public_id=public_id,
+            hls_path=hls_url,
+            thumbnail_url=thumb_url,
+            thumbnail_public_id=thumb_public_id,
+            duration=duration,
+            width=width,
+            height=height,
+            owner_id=current_user.id,
+            category_id=category_id,
+            created_at=datetime.utcnow(),
+        )
+
+        session.add(media)
+        session.commit()
+        session.refresh(media)
+
+        return {
+            "message": f"{media_type.capitalize()} uploaded successfully!",
+            "media": media,
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
+
+# @router.put("/media/update/{media_id}", response_model=Media)
+# async def update_media(
+#     media_id: int,
+#     title: Optional[str] = Form(None),
+#     description: Optional[str] = Form(None),
+#     media_type: Optional[str] = Form(None),
+#     category_id: Optional[str] = Form(None),
+#     file: Optional[UploadFile] = File(None),
+#     thumbnail: Optional[UploadFile] = File(None),
+#     session: Session = Depends(get_session),
+#     current_user: User = Depends(get_current_user),
+# ):
+#     # 1. Fetch media object
+#     media = session.get(Media, media_id)
+#     if not media:
+#         raise HTTPException(status_code=404, detail="Media not found")
+
+#     if media.owner_id != current_user.id:
+#         raise HTTPException(status_code=403, detail="Not authorized to update this media")
+
+#     # 2. Update simple fields
+#     if title:
+#         media.title = title
+#     if description:
+#         media.description = description
+#     if media_type:
+#         media.media_type = media_type
+#     if category_id is not None:
+#         media.category_id = category_id
+
+#     os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+#     # 3. Handle file replacement (main media file)
+#     if file:
+#         # Remove old file if exists
+#         if media.file_url and os.path.exists(media.file_url):
+#             os.remove(media.file_url)
+
+#         file_ext = os.path.splitext(file.filename)[1]
+#         unique_name = f"{current_user.id}_{media_id}_{uuid4().hex}{file_ext}"
+#         file_path = os.path.join(UPLOAD_DIR, unique_name)
+
+#         with open(file_path, "wb") as buffer:
+#             shutil.copyfileobj(file.file, buffer)
+
+#         media.file_url = file_path
+
+#     # 4. Handle thumbnail replacement
+#     if thumbnail:
+#         if media.thumbnail_url and os.path.exists(media.thumbnail_url):
+#             os.remove(media.thumbnail_url)
+
+#         thumb_ext = os.path.splitext(thumbnail.filename)[1]
+#         thumb_name = f"{current_user.id}_{media_id}_thumb_{uuid4().hex}{thumb_ext}"
+#         thumb_path = os.path.join(UPLOAD_DIR, thumb_name)
+
+#         with open(thumb_path, "wb") as f:
+#             f.write(await thumbnail.read())
+
+#         media.thumbnail_url = thumb_path
+
+#     session.add(media)
+#     session.commit()
+#     session.refresh(media)
+
+#     return media
+
+
+@router.put("/media/update/{media_id}", response_model=Media)
+async def update_media(
+    media_id: int,
+    title: Optional[str] = Form(None),
+    description: Optional[str] = Form(None),
+    media_type: Optional[str] = Form(None),
+    category_id: Optional[int] = Form(None),
+    file: Optional[UploadFile] = File(None),
     thumbnail: Optional[UploadFile] = File(None),
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
-    hls_path = ''
-    thumbnail_url = None
-    width = None
-    height = None
-    duration = None
-    if media_type == 'audio':
-        file_ext = os.path.splitext(file.filename)[1]
-        unique_folder_name = f"{current_user.id}_{uuid4().hex}"
-        unique_name = f"{unique_folder_name}{file_ext}"
-        file_path = os.path.join(MEDIA_UPLOAD_DIR, unique_name)
+    media = session.query(Media).filter(Media.id == media_id, Media.owner_id == current_user.id).first()
+    if not media:
+        raise HTTPException(status_code=404, detail="Media not found or not owned by user")
 
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+    try:
+        # Update metadata
+        if title:
+            media.title = title
+        if description:
+            media.description = description
+        if category_id:
+            media.category_id = category_id
+        if media_type:
+            media.media_type = media_type
 
-        file_url = file_path
+        # Preserve existing thumbnail info
+        public_id = media.public_id
+        thumb_url = media.thumbnail_url
+        thumb_public_id = media.thumbnail_public_id
 
-        output_dir = HLS_OUTPUT_DIR / unique_folder_name
-        background_tasks.add_task(convert_audio_to_hls, file_url, output_dir)
-        hls_path = f"{output_dir}/master.m3u8"
+        # Replace media file if provided
+        if file:
+            # Delete old media from Cloudinary
+            if media.public_id:
+                try:
+                    cloudinary.uploader.destroy(media.public_id, resource_type="video")
+                except Exception as e:
+                    print("Warning: Failed to delete old media:", e)
 
-        if thumbnail:
-            thumb_ext = os.path.splitext(thumbnail.filename)[1]
-            thumb_name = f"{current_user.id}_thumb_{uuid4().hex}{thumb_ext}"
-            thumb_path = os.path.join(THUMBNAIL_DIR, thumb_name)
+            mime = file.content_type or ""
+            resource_type = "video" if mime.startswith(("video/", "audio/")) else "auto"
 
-            with open(thumb_path, "wb") as f:
-                f.write(await thumbnail.read())
+            upload_res = cloudinary.uploader.upload(
+                file.file,
+                resource_type=resource_type,
+                folder=f"mediahub/media/{current_user.id}",
+                use_filename=True,
+                unique_filename=False,
+                overwrite=True
+            )
 
-            thumbnail_url = thumb_path
+            public_id = upload_res.get("public_id")
+            secure_url = upload_res.get("secure_url")
+            cloud_name = cloudinary.config().cloud_name
+            hls_url = f"https://res.cloudinary.com/{cloud_name}/video/upload/{public_id}.m3u8"
 
-        duration = get_audio_metadata(file_url)['duration']
+            # Generate video thumbnail if applicable
+            if media.media_type == "video":
+                thumb_url, _ = cloudinary_url(
+                    public_id,
+                    resource_type="video",
+                    format="jpg",
+                    transformation=[{"width": 400, "height": 225, "crop": "fill"}],
+                )
 
-    elif media_type == 'video':
-        if not file.filename.endswith((".mp4", ".mov", ".mkv")):
-            raise HTTPException(status_code=400, detail="Unsupported video format")
-        
-        file_ext = os.path.splitext(file.filename)[1]
-        unique_folder_name = f"{current_user.id}_{uuid4().hex}"
-        unique_name = f"{unique_folder_name}{file_ext}"
+            media.file_url = secure_url
+            media.public_id = public_id
+            media.hls_path = hls_url
+            media.duration = upload_res.get("duration")
+            media.width = upload_res.get("width")
+            media.height = upload_res.get("height")
 
-        file_url = MEDIA_UPLOAD_DIR / unique_name
-        with open(file_url, "wb") as f:
-            f.write(await file.read())
+        # Replace thumbnail for audio if provided
+        if media.media_type == "audio" and thumbnail:
+            if thumb_public_id:
+                try:
+                    cloudinary.uploader.destroy(thumb_public_id, resource_type="image")
+                except Exception as e:
+                    print("Warning: Failed to delete old thumbnail:", e)
 
-        width, height, duration = get_video_metadata(file_url)
+            thumb_res = cloudinary.uploader.upload(
+                thumbnail.file,
+                folder=f"mediahub/audio_thumbnails/{current_user.id}",
+                use_filename=True,
+                unique_filename=True,
+                resource_type="image",
+            )
+            thumb_url = thumb_res.get("secure_url")
+            thumb_public_id = thumb_res.get("public_id")
 
-        # Generate thumbnail
-        thumbnail_url = generate_thumbnail(file_url, THUMBNAIL_DIR, duration)
+        # Finalize thumbnail info
+        media.thumbnail_url = thumb_url
+        media.thumbnail_public_id = thumb_public_id
+        media.updated_at = datetime.utcnow()
 
-        # Prepare output directory for HLS
-        output_dir = HLS_OUTPUT_DIR / unique_folder_name
-        # Run conversion in background
-        background_tasks.add_task(convert_video_to_hls, file_url, output_dir)
+        session.add(media)
+        session.commit()
+        session.refresh(media)
 
-        hls_path = f"{output_dir}/master.m3u8"
+        return {"message": "Media updated successfully", "media": media}
 
-     # Save in DB
-    media = Media(
-        title=title,
-        description=description,
-        media_type=media_type,
-        file_url=str(file_url),
-        hls_path=hls_path,
-        thumbnail_url=str(thumbnail_url),
-        width=width,
-        height=height,
-        duration=duration,
-        owner_id=current_user.id,
-        category_id=category_id,
-        created_at=datetime.utcnow(),
-    )
-    session.add(media)
-    session.commit()
-    session.refresh(media)
-
-    return {"message": "Video uploaded successfully!", "media": media}
+    except Exception as e:
+        session.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to update media: {str(e)}")
 
 
 @router.get("/media/list", response_model=List[MediaRead])
@@ -516,72 +786,50 @@ def get_media(
     }
 
 
-@router.put("/media/update/{media_id}", response_model=Media)
-async def update_media(
-    media_id: int,
-    title: Optional[str] = Form(None),
-    description: Optional[str] = Form(None),
-    media_type: Optional[str] = Form(None),
-    category_id: Optional[str] = Form(None),
-    file: Optional[UploadFile] = File(None),
-    thumbnail: Optional[UploadFile] = File(None),
-    session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
-):
-    # 1. Fetch media object
-    media = session.get(Media, media_id)
-    if not media:
-        raise HTTPException(status_code=404, detail="Media not found")
 
-    if media.owner_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Not authorized to update this media")
+# @router.delete("/media/delete/{media_id}")
+# def delete_media(
+#     media_id: int,
+#     session: Session = Depends(get_session),
+#     current_user: User = Depends(get_current_user),
+# ):
+#     media = session.get(Media, media_id)
+#     # if not media:
+#     #     raise HTTPException(status_code=404, detail="Media not found")
 
-    # 2. Update simple fields
-    if title:
-        media.title = title
-    if description:
-        media.description = description
-    if media_type:
-        media.media_type = media_type
-    if category_id is not None:
-        media.category_id = category_id
+#     if media.owner_id != current_user.id:
+#         raise HTTPException(status_code=403, detail="Not authorized to delete this media")
 
-    os.makedirs(UPLOAD_DIR, exist_ok=True)
+#     # if media.file_url and os.path.exists(media.file_url):
+#     #     os.remove(media.file_url)
 
-    # 3. Handle file replacement (main media file)
-    if file:
-        # Remove old file if exists
-        if media.file_url and os.path.exists(media.file_url):
-            os.remove(media.file_url)
+#     if media.file_url:
+#         file_path = Path(media.file_url)
+#         if file_path.exists() and file_path.is_file():
+#             try:
+#                 file_path.unlink()
+#                 print(f"✅ Deleted original file: {file_path}")
+#             except Exception as e:
+#                 print(f"⚠️ Error deleting file {file_path}: {e}")
 
-        file_ext = os.path.splitext(file.filename)[1]
-        unique_name = f"{current_user.id}_{media_id}_{uuid4().hex}{file_ext}"
-        file_path = os.path.join(UPLOAD_DIR, unique_name)
+#     if media.hls_path:
+#         hls_path = Path(media.hls_path).parent  # remove the folder (not just index.m3u8)
+#         if hls_path.exists() and hls_path.is_dir():
+#             try:
+#                 shutil.rmtree(hls_path)
+#                 print(f"✅ Deleted HLS directory: {hls_path}")
+#             except Exception as e:
+#                 print(f"⚠️ Error deleting HLS directory {hls_path}: {e}")
 
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+#     if media.thumbnail_url and os.path.exists(media.thumbnail_url):
+#         os.remove(media.thumbnail_url)
 
-        media.file_url = file_path
+#     # Remove from DB
+#     session.delete(media)
+#     session.commit()
 
-    # 4. Handle thumbnail replacement
-    if thumbnail:
-        if media.thumbnail_url and os.path.exists(media.thumbnail_url):
-            os.remove(media.thumbnail_url)
+#     return {"message": "Media deleted successfully"}
 
-        thumb_ext = os.path.splitext(thumbnail.filename)[1]
-        thumb_name = f"{current_user.id}_{media_id}_thumb_{uuid4().hex}{thumb_ext}"
-        thumb_path = os.path.join(UPLOAD_DIR, thumb_name)
-
-        with open(thumb_path, "wb") as f:
-            f.write(await thumbnail.read())
-
-        media.thumbnail_url = thumb_path
-
-    session.add(media)
-    session.commit()
-    session.refresh(media)
-
-    return media
 
 
 @router.delete("/media/delete/{media_id}")
@@ -591,41 +839,27 @@ def delete_media(
     current_user: User = Depends(get_current_user),
 ):
     media = session.get(Media, media_id)
-    # if not media:
-    #     raise HTTPException(status_code=404, detail="Media not found")
+    if not media:
+        raise HTTPException(status_code=404, detail="Media not found")
 
     if media.owner_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Not authorized to delete this media")
+        raise HTTPException(status_code=403, detail="Not authorized")
 
-    # if media.file_url and os.path.exists(media.file_url):
-    #     os.remove(media.file_url)
+    # Delete files from Cloudinary
+    try:
+        if media.public_id:
+            cloudinary.uploader.destroy(media.public_id, resource_type="video")
+        if getattr(media, "thumbnail_public_id", None):
+            cloudinary.uploader.destroy(media.thumbnail_public_id, resource_type="image")
+    except Exception as e:
+        print(f"Cloudinary deletion failed: {e}")
 
-    if media.file_url:
-        file_path = Path(media.file_url)
-        if file_path.exists() and file_path.is_file():
-            try:
-                file_path.unlink()
-                print(f"✅ Deleted original file: {file_path}")
-            except Exception as e:
-                print(f"⚠️ Error deleting file {file_path}: {e}")
-
-    if media.hls_path:
-        hls_path = Path(media.hls_path).parent  # remove the folder (not just index.m3u8)
-        if hls_path.exists() and hls_path.is_dir():
-            try:
-                shutil.rmtree(hls_path)
-                print(f"✅ Deleted HLS directory: {hls_path}")
-            except Exception as e:
-                print(f"⚠️ Error deleting HLS directory {hls_path}: {e}")
-
-    if media.thumbnail_url and os.path.exists(media.thumbnail_url):
-        os.remove(media.thumbnail_url)
-
-    # Remove from DB
+    # Delete DB record
     session.delete(media)
     session.commit()
 
     return {"message": "Media deleted successfully"}
+
 
 
 @router.get("/media-management", response_model=PaginatedMedia)
